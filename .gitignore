@@ -21,3 +21,15 @@ snex-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Python cache files
+__pycache__
+*.pyc
+.ruff_cache
+.mypy_cache
+
+# Elixir LS files
+.elixir_ls
+
+# Ignore .fetch files in case you like to edit your project deps locally.
+/.fetch
