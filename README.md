@@ -13,7 +13,7 @@ Easy and efficient Python interop for Elixir.
 - 🤸 **Flexible:**
   Supports custom Python environments, `asyncio` code, and integration with external Python projects.
 - ⏩ **Forward Compatibility:**
-  Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use —they should work day one!
+  Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use — they should work day one!
 
 ## Quick example
 
