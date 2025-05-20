@@ -51,20 +51,17 @@ defmodule Snex.MixProject do
       links: %{"GitHub" => "https://github.com/kzemek/snex"},
       licenses: ["Apache-2.0"],
       files: [
-        # Defaults
-        "lib",
-        "priv",
         ".formatter.exs",
-        "mix.exs",
-        "README.md",
-        "LICENSE",
-        "NOTICE",
-        "CHANGELOG",
-        "README.md",
-        # Extras
         "c_src/*.[ch]",
+        "lib",
+        "LICENSE",
+        "Makefile",
+        "mix.exs",
+        "NOTICE",
         "py_src/*.py",
-        "Makefile"
+        "py_src/pyproject.toml",
+        "py_src/uv.lock",
+        "README.md"
       ]
     ]
   end
