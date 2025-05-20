@@ -2,6 +2,7 @@ import ast
 import asyncio
 import base64
 import enum
+import functools
 import json
 import random
 import sys
@@ -86,6 +87,10 @@ erl_out_transport: asyncio.WriteTransport
 envs: dict[EnvID, dict[str, Any]] = {}
 
 
+def make_id() -> EnvID:
+    return random.randbytes(16)  # noqa: S311
+
+
 def write_response(req_id: bytes, response: Response) -> None:
     data_json = json.dumps(response.__dict__).encode("utf-8")
     bytes_cnt = len(req_id) + len(data_json)
@@ -118,7 +123,7 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
 
     env.update(cmd.additional_vars)
 
-    env_id: EnvID = random.randbytes(16)  # noqa: S311
+    env_id: EnvID = make_id()
     envs[env_id] = env
 
     return OkEnvResponse(base64.b64encode(env_id).decode("utf-8"))
@@ -175,8 +180,23 @@ def clean_env(env_id: EnvID) -> None:
     envs.pop(env_id)
 
 
+def on_task_done(
+    req_id: EnvID,
+    running_tasks: set[asyncio.Task[Any]],
+    task: asyncio.Task[Any],
+) -> None:
+    running_tasks.discard(task)
+
+    try:
+        write_response(req_id, task.result())
+    except Exception as e:  # noqa: BLE001
+        result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
+        write_response(req_id, result)
+
+
 async def main() -> None:
     loop = asyncio.get_running_loop()
+    running_tasks: set[asyncio.Task[Any]] = set()
 
     erl_in = open(3, "rb", 0)  # noqa: ASYNC230, SIM115
     erl_out = open(4, "wb", 0)  # noqa: ASYNC230, SIM115
@@ -211,8 +231,11 @@ async def main() -> None:
                 clean_env(req_id)
                 continue
 
-            result = await run(json_data)
-            write_response(req_id, result)
+            task = loop.create_task(run(json_data))
+            running_tasks.add(task)
+            task.add_done_callback(
+                functools.partial(on_task_done, req_id, running_tasks),
+            )
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
             write_response(req_id, result)
