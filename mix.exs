@@ -24,7 +24,6 @@ defmodule Snex.MixProject do
 
   defp deps do
     [
-      {:nimble_options, "~> 1.1.1"},
       {:elixir_make, "~> 0.9.0", runtime: false},
       # dev dependencies
       {:ex_doc, "~> 0.38.1", only: :dev, runtime: false, optional: true},
@@ -50,7 +49,20 @@ defmodule Snex.MixProject do
 
   defp aliases do
     [
-      lint: ["credo --strict", "dialyzer"]
+      credo: "credo --strict",
+      ruff: &ruff/1,
+      mypy: &mypy/1,
+      lint: ["credo", "dialyzer", "ruff", "mypy"]
     ]
+  end
+
+  defp ruff(_) do
+    Mix.shell().info("Running ruff")
+    Mix.shell().cmd("uv run ruff check", cd: "py_src")
+  end
+
+  defp mypy(_) do
+    Mix.shell().info("Running mypy")
+    Mix.shell().cmd("uv run mypy --strict .", cd: "py_src")
   end
 end

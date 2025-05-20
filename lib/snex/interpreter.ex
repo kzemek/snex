@@ -1,42 +1,53 @@
 defmodule Snex.Interpreter do
+  @moduledoc """
+  Runs a Python interpreter in a separate OS process.
+
+  This module is responsible for facilitating in-and-out communication between Elixir
+  and the spawned Python interpreter.
+  """
   use GenServer
+
+  alias Snex.Internal
 
   require Logger
 
+  @typedoc """
+  Running instance of `Snex.Interpreter`.
+  """
   @type server :: GenServer.server()
 
-  defstruct [:port, pending: %{}]
+  # credo:disable-for-next-line
   alias __MODULE__, as: State
+  defstruct [:port, pending: %{}]
 
-  defmacro __using__(opts) do
-    Snex.Internal.CustomInterpreter.using(__CALLER__, opts)
-  end
+  defmacro __using__(opts), do: Internal.CustomInterpreter.using(__CALLER__.module, opts)
 
-  @start_link_schema_raw [
-    python: [
-      type: :string,
-      default: "python",
-      doc: """
-      The Python executable to use. This can be a full path or a command to \
-      find via `System.find_executable/1`.\
-      """
-    ],
-    environment: [
-      type: {:map, :string, :string},
-      default: %{},
-      doc: """
-      A map of environment variables to set when running the Python \
-      executable.\
-      """
-    ]
-  ]
-  @start_link_schema NimbleOptions.new!(@start_link_schema_raw)
+  @typedoc """
+  Options for `start_link/1`.
+  """
+  @type option ::
+          {:python, String.t()}
+          | {:environment, %{optional(String.t()) => String.t()}}
+          | GenServer.option()
 
+  @doc """
+  Starts a new Python interpreter.
+
+  The interpreter can be used by functions in the `Snex` module.
+
+  ## Options
+
+    * `:python` - The Python executable to use. This can be a full path or a command to \
+      find via `System.find_executable/1`.
+    * `:environment` - A map of environment variables to set when running the Python \
+      executable.
+    * any other options will be passed to `GenServer.start_link/3`.
+
+  """
+  @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    {args, genserver_opts} = Keyword.split(opts, Keyword.keys(@start_link_schema.schema))
-
-    with {:ok, args} <- NimbleOptions.validate(args, @start_link_schema),
-         do: GenServer.start_link(__MODULE__, args, genserver_opts)
+    {args, genserver_opts} = Keyword.split(opts, [:python, :environment])
+    GenServer.start_link(__MODULE__, args, genserver_opts)
   end
 
   @impl GenServer
@@ -53,7 +64,7 @@ defmodule Snex.Interpreter do
         :nouse_stdio,
         packet: 4,
         env: environment,
-        args: [Snex.Internal.Script.path()]
+        args: [Internal.Script.path()]
       ])
 
     {:ok, %State{port: port}}

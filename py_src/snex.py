@@ -25,17 +25,17 @@ class MakeEnvCommand:
         command: Literal["from_env"] = "from_env"
 
     from_env: list[FromEnv]
-    additional_values: dict[str, Any]
+    additional_vars: dict[str, Any]
     command: Literal["make_env"] = "make_env"
 
     def __init__(
         self,
         from_env: list[dict[str, Any]],
-        additional_values: dict[str, Any],
+        additional_vars: dict[str, Any],
         command: Literal["make_env"] = "make_env",
     ) -> None:
         self.from_env = [self.FromEnv(**args) for args in from_env]
-        self.additional_values = additional_values
+        self.additional_vars = additional_vars
         self.command = command
 
 
@@ -44,7 +44,7 @@ class EvalCommand:
     code: str | None
     env_id: EnvIDStr
     returning: str | None
-    additional_values: dict[str, Any]
+    additional_vars: dict[str, Any]
     command: Literal["eval"] = "eval"
 
 
@@ -116,7 +116,7 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
                 if key not in from_env_cmd.keys:
                     env[key] = from_env[key]
 
-    env.update(cmd.additional_values)
+    env.update(cmd.additional_vars)
 
     env_id: EnvID = random.randbytes(16)  # noqa: S311
     envs[env_id] = env
@@ -134,7 +134,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
             f"Environment {cmd.env_id} not found",
         )
 
-    for key, value in cmd.additional_values.items():
+    for key, value in cmd.additional_vars.items():
         env[key] = value
 
     if cmd.code:

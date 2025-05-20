@@ -1,11 +1,12 @@
 defmodule Snex.Env do
+  @moduledoc false
   alias Snex.Internal.EnvReferenceNif
 
-  @opaque t :: %__MODULE__{
-            id: binary(),
-            ref: :erlang.nif_resource(),
-            interpreter: Snex.Interpreter.server()
-          }
+  @type t :: %__MODULE__{
+          id: binary(),
+          ref: :erlang.nif_resource(),
+          interpreter: Snex.Interpreter.server()
+        }
 
   @enforce_keys [:id, :ref, :interpreter]
   defstruct [:id, :ref, :interpreter]

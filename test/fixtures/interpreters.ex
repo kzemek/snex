@@ -1,4 +1,5 @@
 defmodule SnexTest.NumpyInterpreter do
+  @moduledoc false
   use Snex.Interpreter,
     otp_app: :snex,
     pyproject_toml: """
@@ -11,6 +12,7 @@ defmodule SnexTest.NumpyInterpreter do
 end
 
 defmodule SnexTest.MyProject do
+  @moduledoc false
   use Snex.Interpreter,
     otp_app: :snex,
     project_path: "test/my_python_proj"

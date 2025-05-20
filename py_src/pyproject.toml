@@ -5,7 +5,7 @@ requires-python = "==3.11.*"
 dependencies = []
 
 [dependency-groups]
-dev = ["ruff>=0.11.10"]
+dev = ["mypy>=1.15.0", "ruff>=0.11.10"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -20,4 +20,15 @@ warn_unused_configs = true
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D203",
+    "D212",
+]

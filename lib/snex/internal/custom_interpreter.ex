@@ -1,13 +1,20 @@
 defmodule Snex.Internal.CustomInterpreter do
   @moduledoc false
 
-  def using(caller, opts) do
+  @type option ::
+          {:pyproject_toml, String.t() | nil}
+          | {:project_path, String.t() | nil}
+          | {:otp_app, atom()}
+          | {:uv, String.t()}
+
+  @spec using(module(), [option()]) :: Macro.t()
+  def using(caller_module, opts) do
     args =
       opts
       |> Keyword.validate!(
         pyproject_toml: nil,
         project_path: nil,
-        otp_app: Application.get_application(caller.module),
+        otp_app: Application.get_application(caller_module),
         uv: "uv"
       )
       |> Map.new()
@@ -16,7 +23,7 @@ defmodule Snex.Internal.CustomInterpreter do
     if is_nil(args.otp_app) do
       raise ArgumentError, """
       `otp_app` not given to `use Snex.Interpreter`, and cannot be inferred \
-      from caller module #{inspect(caller.module)}.\
+      from caller module #{inspect(caller_module)}.\
       """
     end
 
@@ -31,7 +38,7 @@ defmodule Snex.Internal.CustomInterpreter do
       raise ArgumentError, "Exactly one of `pyproject_toml` and `project_path` must be given."
     end
 
-    %{project_dir: project_dir} = dirs(args.otp_app, caller.module)
+    %{project_dir: project_dir} = dirs(args.otp_app, caller_module)
     File.mkdir_p!(project_dir)
 
     external_resources_quote =
@@ -39,7 +46,7 @@ defmodule Snex.Internal.CustomInterpreter do
         do: copy_inline_project_files(project_dir, args.pyproject_toml),
         else: copy_external_project_files(project_dir, project_path: args.project_path)
 
-    uv_sync(caller.module, args)
+    uv_sync(caller_module, args)
 
     quote do
       unquote(external_resources_quote)
@@ -94,7 +101,7 @@ defmodule Snex.Internal.CustomInterpreter do
   end
 
   defp copy_inline_project_files(project_dir, pyproject_toml) do
-    File.write!(Path.join(project_dir, "pyproject.toml"), pyproject_toml)
+    Path.join(project_dir, "pyproject.toml") |> File.write!(pyproject_toml)
     nil
   end
 
@@ -114,8 +121,9 @@ defmodule Snex.Internal.CustomInterpreter do
     end
   end
 
+  # credo:disable-for-next-line Credo.Check.Readability.Specs
   def dirs(otp_app, module) do
-    priv_dir = List.to_string(:code.priv_dir(otp_app))
+    priv_dir = otp_app |> :code.priv_dir() |> List.to_string()
     base_dir = Path.join(priv_dir, "snex")
     python_install_dir = Path.join(base_dir, "python")
     project_dir = Path.join(base_dir, inspect(module))
@@ -132,6 +140,9 @@ defmodule Snex.Internal.CustomInterpreter do
     }
   end
 
-  defp cp(src_dir, dst_dir, filename),
-    do: File.cp(Path.join(src_dir, filename), Path.join(dst_dir, filename))
+  defp cp(src_dir, dst_dir, filename) do
+    src_path = Path.join(src_dir, filename)
+    dst_path = Path.join(dst_dir, filename)
+    File.cp(src_path, dst_path)
+  end
 end

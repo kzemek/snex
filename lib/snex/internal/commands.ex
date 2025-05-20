@@ -6,14 +6,20 @@ defmodule Snex.Internal.Command do
     end
   end
 
+  @spec __before_compile__(Macro.Env.t()) :: nil
   def __before_compile__(env) do
     defimpl JSON.Encoder, for: env.module do
+      alias Snex.Internal
+
       def encode(command, encoder),
-        do: Snex.Internal.Command.encode(command, encoder)
+        do: Internal.Command.encode(command, encoder)
     end
+
+    nil
   end
 
   @doc false
+  @spec encode(struct(), JSON.Encoder.t()) :: JSON.Encoder.t()
   def encode(%struct{} = command, encoder) do
     command_name = struct |> Module.split() |> List.last() |> Macro.underscore()
 
@@ -51,11 +57,11 @@ defmodule Snex.Internal.Commands.MakeEnv do
 
   @type t :: %__MODULE__{
           from_env: [FromEnv.t()],
-          additional_values: %{String.t() => term()}
+          additional_vars: %{String.t() => term()}
         }
 
   @enforce_keys []
-  defstruct from_env: [], additional_values: %{}
+  defstruct from_env: [], additional_vars: %{}
 end
 
 defmodule Snex.Internal.Commands.Eval do
@@ -66,9 +72,9 @@ defmodule Snex.Internal.Commands.Eval do
           code: String.t() | nil,
           env: Snex.Env.t(),
           returning: String.t() | nil,
-          additional_values: %{String.t() => term()}
+          additional_vars: %{String.t() => term()}
         }
 
   @enforce_keys [:code, :env]
-  defstruct [:code, :env, returning: nil, additional_values: %{}]
+  defstruct [:code, :env, returning: nil, additional_vars: %{}]
 end
