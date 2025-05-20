@@ -5,7 +5,7 @@ CFLAGS += -I"$(ERTS_INCLUDE_DIR)"
 CFLAGS += -Ic_src
 
 PRIV_DIR = $(MIX_APP_PATH)/priv
-LIB_NAME = $(PRIV_DIR)/env_reference_nif.so
+
 ifneq ($(CROSSCOMPILE),)
     # crosscompiling
     CFLAGS += -fPIC
@@ -20,21 +20,22 @@ else
     endif
 endif
 
-NIF_SRC = c_src/env_reference_nif.c
+LIBS = $(PRIV_DIR)/env_reference_nif.so
 
-
+.PHONY: calling_from_make
 calling_from_make:
 	mix compile
 
-all: _priv_dir _lib_name
+.PHONY: all
+all: $(LIBS)
 
-_lib_name: $(NIF_SRC)
-	$(CC) $(CFLAGS) -shared $(LDFLAGS) $^ -o "$(LIB_NAME)"
+$(PRIV_DIR)/%.so: c_src/%.c | $(PRIV_DIR)
+	$(CC) $(CFLAGS) -shared $(LDFLAGS) $^ -o "$@"
 
-_priv_dir:
+$(PRIV_DIR):
+	@test -n "$(MIX_APP_PATH)" || (echo "This Makefile target cannot be called directly" ; exit 1)
 	mkdir -p "$(PRIV_DIR)"
 
+.PHONY: clean
 clean:
-	rm -f $(LIB_NAME)
-
-.PHONY: all clean _priv_dir _lib_name
+	rm -f $(LIBS)
