@@ -23,12 +23,13 @@ defmodule Snex.Error do
   @typedoc """
   Error codes for all errors.
   """
-  @type code :: python_runtime_error() | internal_error() | env_not_found() | env_key_not_found()
+  @type error_code ::
+          python_runtime_error() | internal_error() | env_not_found() | env_key_not_found()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.
   """
-  @type t :: %__MODULE__{code: code(), reason: String.t() | term()}
+  @type t :: %__MODULE__{code: error_code(), reason: String.t() | term()}
 
   defexception [:code, :reason]
 
