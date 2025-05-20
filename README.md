@@ -57,7 +57,7 @@ iex> Snex.pyeval(env, """
 ```elixir
 def deps do
   [
-    {:snex, "~> 0.0.1"}
+    {:snex, "~> 0.1.0"}
   ]
 end
 ```
