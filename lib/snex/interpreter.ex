@@ -1,10 +1,26 @@
 defmodule Snex.Interpreter do
-  @moduledoc """
+  @moduledoc ~s'''
   Runs a Python interpreter in a separate OS process.
 
   This module is responsible for facilitating in-and-out communication between Elixir
   and the spawned Python interpreter.
-  """
+
+  Usually you won't interact with this module directly.
+  Instead, you would create a custom interpreter module with `use Snex.Interpreter`:
+
+      defmodule SnexTest.NumpyInterpreter do
+        use Snex.Interpreter,
+          pyproject_toml: """
+          [project]
+          name = "my-numpy-project"
+          version = "0.0.0"
+          requires-python = "==3.11.*"
+          dependencies = ["numpy>=2"]
+          """
+        end
+
+  See the `m:Snex#module-custom-interpreter` module documentation for more detail.
+  '''
   use GenServer
 
   alias Snex.Internal

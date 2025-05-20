@@ -84,7 +84,7 @@ Each `Snex.Interpreter` (BEAM) process manages a separate Python (OS) process.
 
 ### `Snex.pyeval`
 
-The main way of interacting with the interpreter process is `Snex.pyeval`.
+The main way of interacting with the interpreter process is `Snex.pyeval/4` (and other arities).
 This is the function that runs Python code, returns data from the interpreter, and more.
 
 ```elixir
@@ -109,20 +109,20 @@ iex> Snex.pyeval(env, "x = 3", returning: ["x", "x*2", "x**2"])
 {:ok, [3, 6, 9]}
 ```
 
-### `%Snex.Env{}`
+### Environments
 
-`%Snex.Env{}`, also called "environment", is an Elixir-side reference to Python-side variable context in which your Python code will run.
-New environments can be allocated with `Snex.make_env`.
+`Snex.Env` struct, also called "environment", is an Elixir-side reference to Python-side variable context in which your Python code will run.
+New environments can be allocated with `Snex.make_env/3` (and other arities).
 
 Environments are mutable, and will be modified by your Python code.
 In Python parlance, they are **global & local symbol table** your Python code is executed with.
 
 > [!IMPORTANT]
 >
-> **Environments are garbage collected**<br/>
+> **Environments are garbage collected**  
 > When a `%Snex.Env{}` value is cleaned up by the BEAM VM, the Python process is signalled to deallocate the environment associated with that value.
 
-Reusing a single environment, you can use variables defined in the previous `Snex.pyeval` calls:
+Reusing a single environment, you can use variables defined in the previous `Snex.pyeval/4` calls:
 
 ```elixir
 iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
@@ -140,7 +140,7 @@ iex> Snex.pyeval(env, returning: ["x", "y", "z"])
 {:ok, [10, 20, 2]}
 ```
 
-Using `Snex.make_env`, you can also create a new environment:
+Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environment:
 
 - **copying variables from an old environment**
   ```elixir
@@ -155,12 +155,12 @@ Using `Snex.make_env`, you can also create a new environment:
   ]))
   ```
 - **setting some initial variables (taking precedence over variables from `:from`)**
-
   ```elixir
   Snex.make_env(interpreter, %{"hello" => 42.0}, from: {old_env, only: ["world"]})
   ```
 
 > [!WARNING]
+>
 > The environments you copy from have to belong to the same interpreter!
 
 ### JSON serialization
@@ -178,7 +178,7 @@ iex> Snex.pyeval(env, "x = ('hello', y)", %{"y" => :world}, returning: "x")
 
 ### Run async code
 
-Code ran by Snex lives in an `asyncio` loop.
+Code ran by Snex lives in an [`asyncio`](https://docs.python.org/3/library/asyncio.html) loop.
 You can include async functions in your snippets and await them on the top level:
 
 ```elixir

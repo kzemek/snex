@@ -1,9 +1,10 @@
 defmodule Snex do
-  @moduledoc """
-  Easy and efficient Python interop for Elixir.
+  @external_resource "README.md"
+  @moduledoc File.read!("README.md")
+             |> String.replace(~r/^.*?(?=Easy and efficient Python interop for Elixir)/s, "")
+             |> String.replace("> [!WARNING]", "> #### Warning {: .warning}")
+             |> String.replace("> [!IMPORTANT]", "> #### Important {: .info}")
 
-  See [README](README.md) for an overview and guide.
-  """
   alias Snex.Internal.Commands
 
   @typedoc """

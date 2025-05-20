@@ -38,8 +38,8 @@ defmodule Snex.MixProject do
       source_url: "https://github.com/kzemek/snex",
       homepage_url: "https://github.com/kzemek/snex",
       docs: [
-        main: "readme",
-        extras: ["README.md", "LICENSE", "NOTICE"]
+        main: "Snex",
+        extras: ["LICENSE", "NOTICE"]
       ]
     ]
   end
