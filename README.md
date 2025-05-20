@@ -1,4 +1,9 @@
-# Snex
+# Snex 🐍
+
+[![CI](https://github.com/kzemek/snex/actions/workflows/elixir.yml/badge.svg)](https://github.com/kzemek/snex/actions/workflows/elixir.yml)
+[![Module Version](https://img.shields.io/hexpm/v/snex.svg)](https://hex.pm/packages/snex)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/snex/)
+[![License](https://img.shields.io/hexpm/l/snex.svg)](https://github.com/kzemek/snex/blob/master/LICENSE)
 
 Easy and efficient Python interop for Elixir.
 
@@ -52,7 +57,7 @@ iex> Snex.pyeval(env, """
 ```elixir
 def deps do
   [
-    {:snex, git: "https://github.com/kzemek/snex.git"}
+    {:snex, "~> 0.0.1"}
   ]
 end
 ```

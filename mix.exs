@@ -4,15 +4,17 @@ defmodule Snex.MixProject do
   def project do
     [
       app: :snex,
+      description: "🐍 Easy and efficient Python interop for Elixir",
       compilers: [:elixir_make] ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       make_targets: ["all"],
       make_clean: ["clean"],
-      version: "0.1.0",
+      version: "0.0.1",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases()
+      aliases: aliases(),
+      package: package()
     ] ++ docs()
   end
 
@@ -40,6 +42,29 @@ defmodule Snex.MixProject do
       docs: [
         main: "Snex",
         extras: ["LICENSE", "NOTICE"]
+      ]
+    ]
+  end
+
+  defp package do
+    [
+      links: %{"GitHub" => "https://github.com/kzemek/snex"},
+      licenses: ["Apache-2.0"],
+      files: [
+        # Defaults
+        "lib",
+        "priv",
+        ".formatter.exs",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "NOTICE",
+        "CHANGELOG",
+        "README.md",
+        # Extras
+        "c_src/*.[ch]",
+        "py_src/*.py",
+        "Makefile"
       ]
     ]
   end

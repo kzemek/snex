@@ -1,0 +1,49 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  ELIXIR_VERSION: "1.18.3"
+  ERLANG_VERSION: "27.3.4"
+
+jobs:
+  build:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.ERLANG_VERSION }}
+
+      - name: Get deps
+        run: mix deps.get
+
+      - name: Update version in mix.exs and README.md
+        run: |
+          sed -i 's/version: ".*"/version: "${{ github.event.release.tag_name }}"/' mix.exs
+          sed -i 's/:snex, "~> .*"/:snex, "~> ${{ github.event.release.tag_name }}"/' README.md
+          git config --global user.name 'Konrad Zemek'
+          git config --global user.email 'kzemek@users.noreply.github.com'
+          git add mix.exs README.md
+          git commit -m "Release ${{ github.event.release.tag_name }}"
+          git push
+
+      - name: Retag release
+        run: |
+          git tag -f ${{ github.event.release.tag_name }} HEAD
+          git push -f origin ${{ github.event.release.tag_name }}
+
+      - name: Release to hex.pm
+        run: mix hex.publish --yes
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
