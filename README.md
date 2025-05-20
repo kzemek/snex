@@ -1,6 +1,6 @@
 # Snex 🐍
 
-[![CI](https://github.com/kzemek/snex/actions/workflows/elixir.yml/badge.svg)](https://github.com/kzemek/snex/actions/workflows/elixir.yml)
+[![CI](https://github.com/kzemek/snex/actions/workflows/ci.yml/badge.svg)](https://github.com/kzemek/snex/actions/workflows/ci.yml)
 [![Module Version](https://img.shields.io/hexpm/v/snex.svg)](https://hex.pm/packages/snex)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/snex/)
 [![License](https://img.shields.io/hexpm/l/snex.svg)](https://github.com/kzemek/snex/blob/master/LICENSE)
