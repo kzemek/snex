@@ -48,7 +48,7 @@ iex> Snex.pyeval(env, """
 ## Installation & Requirements
 
 - Elixir `>= 1.18`
-- [uv](https://github.com/astral-sh/uv) -
+- [uv](https://github.com/astral-sh/uv) `>= 0.6.8` -
   a fast Python package & project manager, used by Snex to create and manage Python environments.
   It has to be available at compilation time but isn't needed at runtime.
 - Python `>= 3.11` -
