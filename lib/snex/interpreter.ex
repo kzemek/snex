@@ -139,8 +139,8 @@ defmodule Snex.Interpreter do
       {:ok, %{"status" => "ok_value", "value" => value}} ->
         {:ok, value}
 
-      {:ok, %{"status" => "error", "code" => code, "reason" => reason}} ->
-        {:error, Snex.Error.from_raw(code, reason)}
+      {:ok, %{"status" => "error", "code" => code, "reason" => reason, "traceback" => traceback}} ->
+        {:error, Snex.Error.from_raw(code, reason, traceback)}
 
       {:ok, value} ->
         {:error, Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})}

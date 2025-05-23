@@ -6,6 +6,7 @@ import functools
 import json
 import random
 import sys
+import traceback
 from dataclasses import dataclass
 from enum import auto
 from typing import Any, Literal
@@ -83,6 +84,7 @@ class ErrorCode(enum.StrEnum):
 class ErrorResponse:
     code: ErrorCode
     reason: str
+    traceback: list[str] | None = None
     status: Literal["error"] = "error"
 
 
@@ -211,7 +213,11 @@ def on_task_done(
     try:
         write_response(req_id, task.result())
     except Exception as e:  # noqa: BLE001
-        result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
+        result = ErrorResponse(
+            ErrorCode.PYTHON_RUNTIME_ERROR,
+            str(e),
+            traceback.format_exception(e),
+        )
         write_response(req_id, result)
 
 
@@ -258,7 +264,11 @@ async def main() -> None:
                 functools.partial(on_task_done, req_id, running_tasks),
             )
         except Exception as e:  # noqa: BLE001
-            result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
+            result = ErrorResponse(
+                ErrorCode.PYTHON_RUNTIME_ERROR,
+                str(e),
+                traceback.format_exception(e),
+            )
             write_response(req_id, result)
 
 
