@@ -10,6 +10,7 @@ from .models import (
     ErrorCode,
     ErrorResponse,
     EvalCommand,
+    InitCommand,
     MakeEnvCommand,
     OkEnvResponse,
     OkResponse,
@@ -20,6 +21,7 @@ from .models import (
 ID_LEN_BYTES = 16
 
 erl_out_transport: asyncio.WriteTransport
+root_env: dict[str, Any] = {}
 envs: dict[EnvID, dict[str, Any]] = {}
 
 
@@ -37,8 +39,22 @@ def write_response(req_id: bytes, response: Response) -> None:
     )
 
 
+async def run_code(code: str, env: dict[str, Any]) -> None:
+    code = compile(code, "", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+    res = eval(code, env, env)  # noqa: S307
+    if asyncio.iscoroutine(res):
+        await res
+
+
+async def run_init(cmd: InitCommand) -> Response:
+    if cmd.code:
+        await run_code(cmd.code, root_env)
+
+    return OkResponse()
+
+
 def run_make_env(cmd: MakeEnvCommand) -> Response:
-    env: dict[str, Any] = {}
+    env = root_env.copy()
 
     for from_env_cmd in cmd.from_env:
         try:
@@ -80,10 +96,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
         env[key] = value
 
     if cmd.code:
-        code = compile(cmd.code, "", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
-        res = eval(code, env, env)  # noqa: S307
-        if asyncio.iscoroutine(res):
-            await asyncio.create_task(res)
+        await run_code(cmd.code, env)
 
     if cmd.returning:
         try:
@@ -100,6 +113,9 @@ async def run_eval(cmd: EvalCommand) -> Response:
 
 async def run(serialized_data: bytes) -> Response:
     data = serde.decode(serialized_data)
+
+    if data["command"] == "init":
+        return await run_init(InitCommand(**data))
 
     if data["command"] == "make_env":
         return run_make_env(MakeEnvCommand(**data))

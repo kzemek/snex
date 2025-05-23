@@ -24,6 +24,12 @@ class EnvID(bytes):
 
 
 @dataclass
+class InitCommand:
+    code: str | None
+    command: Literal["init"] = "init"
+
+
+@dataclass
 class MakeEnvCommand:
     @dataclass
     class FromEnv:

@@ -170,6 +170,24 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
 >
 > The environments you copy from have to belong to the same interpreter!
 
+#### Initialization script
+
+`Snex.Interpreter` can be given an `:init_script` option.
+The init script runs on interpreter startup, and prepares a "base" environment state that will be cloned to every new environment made with `Snex.make_env/3`.
+
+```elixir
+iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link(
+...>   init_script: """
+...>   import numpy as np
+...>   my_var = 42
+...>   """)
+iex> {:ok, env} = Snex.make_env(inp)
+...>
+...> # The brand new `env` contains `np` and `my_var`
+iex> Snex.pyeval(env, returning: "int(np.array([my_var])[0])")
+{:ok, 42}
+```
+
 ### Serialization
 
 By default, data is JSON-serialized using [`JSON`](https://hexdocs.pm/elixir/JSON.html) on the Elixir side and [`json`](https://docs.python.org/3/library/json.html) on the Python side.

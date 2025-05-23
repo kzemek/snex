@@ -15,6 +15,12 @@
     If no implementation is defined, encoding falls back to `JSON` encoding (`JSON.Encoder` and its defaults).
     Implementations must encode structs into JSON.
 
+- **Add `:init_script` option for `Snex.Interpreter` and its derivatives**
+
+  A init script is a Python code snippet that will run when the interpreter is started and before it runs any commands.
+  Failing to run the script will cause the process initialization to error.
+  The variable context left by the script will become the initial context for all `Snex.make_env/3` calls using this interpreter.
+
 ### Changes
 
 - **Split Python script into multiple files**
