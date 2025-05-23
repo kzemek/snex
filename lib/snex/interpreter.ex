@@ -24,6 +24,7 @@ defmodule Snex.Interpreter do
   use GenServer
 
   alias Snex.Internal
+  alias Snex.Internal.Commands
 
   require Logger
 
@@ -44,6 +45,7 @@ defmodule Snex.Interpreter do
   @type option ::
           {:python, String.t()}
           | {:environment, %{optional(String.t()) => String.t()}}
+          | {:init_script, String.t()}
           | GenServer.option()
 
   @doc """
@@ -57,12 +59,16 @@ defmodule Snex.Interpreter do
       find via `System.find_executable/1`.
     * `:environment` - A map of environment variables to set when running the Python \
       executable.
+    * `:init_script` - A string of Python code to run when the interpreter is started.
+      Failing to run the script will cause the process initialization to fail. The variable
+      context left by the script will be the initial context for all `Snex.make_env/3` calls
+      using this interpreter.
     * any other options will be passed to `GenServer.start_link/3`.
 
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    {args, genserver_opts} = Keyword.split(opts, [:python, :environment])
+    {args, genserver_opts} = Keyword.split(opts, [:python, :environment, :init_script])
     GenServer.start_link(__MODULE__, args, genserver_opts)
   end
 
@@ -85,6 +91,13 @@ defmodule Snex.Interpreter do
         env: environment,
         args: ["-m", "snex"]
       ])
+
+    id = run_command(%Commands.Init{code: opts[:init_script]}, port)
+
+    receive do
+      {^port, {:data, <<^id::binary, response::binary>>}} ->
+        :ok = decode_reply(response, port)
+    end
 
     {:ok, %State{port: port}}
   end

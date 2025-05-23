@@ -37,6 +37,18 @@ defmodule Snex.Internal.Command do
   end
 end
 
+defmodule Snex.Internal.Commands.Init do
+  @moduledoc false
+  use Snex.Internal.Command
+
+  @type t :: %__MODULE__{
+          code: String.t() | nil
+        }
+
+  @enforce_keys [:code]
+  defstruct [:code]
+end
+
 defmodule Snex.Internal.Commands.MakeEnv do
   @moduledoc false
   use Snex.Internal.Command
