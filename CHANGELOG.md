@@ -21,6 +21,8 @@
   Failing to run the script will cause the process initialization to error.
   The variable context left by the script will become the initial context for all `Snex.make_env/3` calls using this interpreter.
 
+- **Make `start_link/1` overridable when deriving `Snex.CustomInterpreter`**
+
 ### Changes
 
 - **Split Python script into multiple files**

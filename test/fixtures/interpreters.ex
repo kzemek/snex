@@ -16,4 +16,12 @@ defmodule SnexTest.MyProject do
   use Snex.Interpreter,
     otp_app: :snex,
     project_path: "test/my_python_proj"
+
+  def start_link(opts) do
+    my_project_path = "test/my_python_proj"
+
+    opts
+    |> Keyword.put(:environment, %{"PYTHONPATH" => my_project_path})
+    |> super()
+  end
 end

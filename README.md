@@ -290,17 +290,24 @@ defmodule SnexTest.MyProject do
   use Snex.Interpreter,
     otp_app: :my_app_name,
     project_path: "test/my_python_proj"
+
+  # Overrides `start_link/1` from `use Snex.Interpreter`
+  def start_link(opts) do
+    # Provide the project's path at runtime - you'll likely want to use
+    # :code.priv_dir(:your_otp_app) and construct a path relative to that.
+    my_project_path = "test/my_python_proj"
+
+    opts
+    |> Keyword.put(:environment, %{"PYTHONPATH" => my_project_path})
+    |> super()
+  end
 end
 
 # $ cat test/my_python_proj/foo.py
 # def bar():
 #     return "hi from bar"
 
-# Provide the project's path at runtime - you'll likely want to use
-# :code.priv_dir(:your_otp_app) and construct a path relative to that.
-iex> {:ok, inp} = SnexTest.MyProject.start_link(environment: %{
-...>   "PYTHONPATH" => "test/my_python_proj"
-...> })
+iex> {:ok, inp} = SnexTest.MyProject.start_link()
 iex> {:ok, env} = Snex.make_env(inp)
 ...>
 iex> Snex.pyeval(env, "import foo", returning: "foo.bar()")

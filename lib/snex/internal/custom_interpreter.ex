@@ -66,9 +66,14 @@ defmodule Snex.Internal.CustomInterpreter do
         Snex.Interpreter.start_link(python: python, environment: environment)
       end
 
-      def child_spec(opts \\ []) do
-        %{Snex.Interpreter.child_spec(opts) | start: {__MODULE__, :start_link, [opts]}}
+      def child_spec(opts) do
+        Supervisor.child_spec({Snex.Interpreter, opts},
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, [opts]}
+        )
       end
+
+      defoverridable start_link: 1, child_spec: 1
     end
   end
 
