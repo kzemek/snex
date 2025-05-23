@@ -4,7 +4,6 @@ defmodule Snex.Internal.CustomInterpreter do
   @type option ::
           {:pyproject_toml, String.t() | nil}
           | {:project_path, String.t() | nil}
-          | {:python_path, (-> String.t()) | nil}
           | {:otp_app, atom()}
           | {:uv, String.t()}
 
@@ -15,7 +14,6 @@ defmodule Snex.Internal.CustomInterpreter do
       |> Keyword.validate!(
         pyproject_toml: nil,
         project_path: nil,
-        python_path: nil,
         otp_app: Application.get_application(caller_module),
         uv: "uv"
       )
@@ -59,16 +57,9 @@ defmodule Snex.Internal.CustomInterpreter do
 
         python = Keyword.get(opts, :python, Path.join(venv_bin_dir, "python"))
 
-        python_path =
-          if python_path_fun = unquote(args.python_path), do: python_path_fun.(), else: ""
-
         environment =
           Map.merge(
-            %{
-              "VIRTUAL_ENV" => venv_dir,
-              "PATH" => "#{venv_bin_dir}:#{System.get_env("PATH")}",
-              "PYTHONPATH" => python_path
-            },
+            %{"VIRTUAL_ENV" => venv_dir, "PATH" => "#{venv_bin_dir}:#{System.get_env("PATH")}"},
             Keyword.get(opts, :environment, %{})
           )
 
