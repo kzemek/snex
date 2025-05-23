@@ -4,10 +4,10 @@ defmodule Snex.Internal.Script do
   # in compile time.
 
   @script_in_path "py_src/snex.py"
-  @script_out_path :code.priv_dir(:snex) |> Path.join("snex.py") |> Path.relative_to_cwd()
+  @script_out_path :code.priv_dir(:snex) |> Path.join("snex.py")
   @external_resource @script_in_path
 
-  IO.puts("Copying #{@script_in_path} to #{@script_out_path}")
+  IO.puts("Copying #{@script_in_path} to #{Path.relative_to_cwd(@script_out_path)}")
   File.cp!(@script_in_path, @script_out_path)
 
   @spec path() :: String.t()
