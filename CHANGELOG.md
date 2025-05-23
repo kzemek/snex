@@ -23,6 +23,8 @@
 
 - **Make `start_link/1` overridable when deriving `Snex.CustomInterpreter`**
 
+- **Add Python traceback to Elixir-side errors emitted by Snex**
+
 ### Changes
 
 - **Split Python script into multiple files**

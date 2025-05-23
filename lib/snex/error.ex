@@ -31,19 +31,15 @@ defmodule Snex.Error do
   """
   @type t :: %__MODULE__{code: error_code(), reason: String.t() | term()}
 
-  defexception [:code, :reason]
-
-  @doc false
-  @spec from_raw(String.t(), any()) :: t()
-  def from_raw(code, reason) do
-    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
-    %__MODULE__{code: String.to_atom(code), reason: reason}
-  end
+  defexception [:code, :reason, :traceback]
 
   @impl Exception
-  def message(%{code: code, reason: reason}) when is_binary(reason),
-    do: "Snex.Error: #{code} #{reason}"
+  def message(%__MODULE__{} = exc),
+    do: "Snex.Error: #{exc.code} #{format_reason(exc.reason)}#{format_traceback(exc.traceback)}"
 
-  def message(%{code: code, reason: reason}),
-    do: "Snex.Error: #{code} #{inspect(reason)}"
+  defp format_reason(<<reason::binary>>), do: reason
+  defp format_reason(reason), do: inspect(reason)
+
+  defp format_traceback(traceback) when is_list(traceback), do: Enum.join(["\n\n" | traceback])
+  defp format_traceback(_traceback), do: nil
 end

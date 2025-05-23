@@ -142,8 +142,10 @@ defmodule Snex.Interpreter do
       {:ok, %{"status" => "ok_value", "value" => value}} ->
         {:ok, value}
 
-      {:ok, %{"status" => "error", "code" => code, "reason" => reason}} ->
-        {:error, Snex.Error.from_raw(code, reason)}
+      {:ok, %{"status" => "error", "code" => code, "reason" => reason, "traceback" => traceback}} ->
+        # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+        code = String.to_atom(code)
+        {:error, Snex.Error.exception(code: code, reason: reason, traceback: traceback)}
 
       {:ok, value} ->
         {:error, Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})}

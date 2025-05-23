@@ -90,6 +90,7 @@ class ErrorCode(enum.StrEnum):
 class ErrorResponse:
     code: ErrorCode
     reason: str
+    traceback: list[str] | None = None
     status: Literal["error"] = "error"
 
 

@@ -2,6 +2,7 @@ import ast
 import asyncio
 import functools
 import sys
+import traceback
 from typing import Any
 
 from . import serde
@@ -140,7 +141,11 @@ def on_task_done(
     try:
         write_response(req_id, task.result())
     except Exception as e:  # noqa: BLE001
-        result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
+        result = ErrorResponse(
+            ErrorCode.PYTHON_RUNTIME_ERROR,
+            str(e),
+            traceback.format_exception(e),
+        )
         write_response(req_id, result)
 
 
@@ -187,5 +192,9 @@ async def run_loop() -> None:
                 functools.partial(on_task_done, req_id, running_tasks),
             )
         except Exception as e:  # noqa: BLE001
-            result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
+            result = ErrorResponse(
+                ErrorCode.PYTHON_RUNTIME_ERROR,
+                str(e),
+                traceback.format_exception(e),
+            )
             write_response(req_id, result)
