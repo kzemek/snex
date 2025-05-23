@@ -17,6 +17,7 @@ defmodule SnexTest.MyProject do
     otp_app: :snex,
     project_path: "test/my_python_proj"
 
+  @spec start_link(list()) :: GenServer.on_start()
   def start_link(opts) do
     my_project_path = "test/my_python_proj"
 

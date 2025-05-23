@@ -55,15 +55,15 @@ defmodule Snex.Internal.CustomInterpreter do
         %{venv_dir: venv_dir, venv_bin_dir: venv_bin_dir} =
           unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
 
-        python = Keyword.get(opts, :python, Path.join(venv_bin_dir, "python"))
+        default_env = %{
+          "VIRTUAL_ENV" => venv_dir,
+          "PATH" => "#{venv_bin_dir}:#{System.get_env("PATH")}"
+        }
 
-        environment =
-          Map.merge(
-            %{"VIRTUAL_ENV" => venv_dir, "PATH" => "#{venv_bin_dir}:#{System.get_env("PATH")}"},
-            Keyword.get(opts, :environment, %{})
-          )
-
-        Snex.Interpreter.start_link(python: python, environment: environment)
+        opts
+        |> Keyword.put_new(:python, Path.join(venv_bin_dir, "python"))
+        |> Keyword.update(:environment, default_env, &Map.merge(default_env, &1))
+        |> Snex.Interpreter.start_link()
       end
 
       def child_spec(opts) do

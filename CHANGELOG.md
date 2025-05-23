@@ -30,3 +30,7 @@
 - **Split Python script into multiple files**
 
   As a direct consequence, Snex now prepends PYTHONPATH for started Python interpreters.
+
+- **Make sure `opts` given to a custom `Interpreter` get passed through to `Snex.Interpreter.start_link/1`**
+
+  Previously, only `:python` and `:environment` options could be customized and other options were discarded.
