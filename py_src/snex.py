@@ -113,7 +113,7 @@ async def run_code(code: str, env: dict[str, Any]) -> None:
     code = compile(code, "", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
     res = eval(code, env, env)  # noqa: S307
     if asyncio.iscoroutine(res):
-        await asyncio.create_task(res)
+        await res
 
 
 async def run_init(cmd: InitCommand) -> Response:
