@@ -98,11 +98,11 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  def handle_info({_port, {:data, <<id::binary-size(16), data::binary>>}}, state) do
+  def handle_info({port, {:data, <<id::binary-size(16), data::binary>>}}, %{port: port} = state) do
     {client, pending} = Map.pop(state.pending, id)
 
     if client do
-      result = decode_reply(data, state.port)
+      result = decode_reply(data, port)
       GenServer.reply(client, result)
     else
       Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
@@ -113,13 +113,13 @@ defmodule Snex.Interpreter do
 
   defp run_command(command, port) do
     id = :rand.bytes(16)
-    data = JSON.encode_to_iodata!(command)
+    data = Snex.Serde.encode_to_iodata!(command)
     Port.command(port, [id, data])
     id
   end
 
   defp decode_reply(data, port) do
-    case JSON.decode(data) do
+    case Snex.Serde.decode(data) do
       {:ok, %{"status" => "ok"}} ->
         :ok
 
