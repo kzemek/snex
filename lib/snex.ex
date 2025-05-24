@@ -164,18 +164,25 @@ defmodule Snex do
   @doc """
   Shorthand for `Snex.pyeval/4`:
 
-      # when given an `additional_vars` map:
+      # when given code and an `additional_vars` map:
       Snex.pyeval(env, code, additional_vars, [] = _opts)
 
-      # when given an `opts` list:
+      # when given code and an `opts` list:
       Snex.pyeval(env, code, %{} = _additional_vars, opts)
+
+      # when given an `additional_vars` map and an `opts` list:
+      Snex.pyeval(env, nil = _code, additional_vars, opts)
 
   """
   @spec pyeval(
           env(),
-          code() | nil,
+          code() | nil | additional_vars(),
           additional_vars() | [pyeval_opt()]
         ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
+  def pyeval(%Snex.Env{} = env, additional_vars, opts)
+      when is_map(additional_vars) and is_list(opts),
+      do: pyeval(env, nil, additional_vars, opts)
+
   def pyeval(%Snex.Env{} = env, code, additional_vars) when is_map(additional_vars),
     do: pyeval(env, code, additional_vars, [])
 

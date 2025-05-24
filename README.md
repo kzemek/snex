@@ -170,10 +170,10 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
 >
 > The environments you copy from have to belong to the same interpreter!
 
-### JSON serialization
+### Serialization
 
-User data sent between Python and Elixir is subject to "standard" JSON serialization and deserialization using [`JSON`](https://hexdocs.pm/elixir/JSON.html) on the Elixir side and [`json`](https://docs.python.org/3/library/json.html) on the Python side.
-Among other things, this means that Python tuples will be serialized as arrays, while Elixir atoms and binaries will be serialized as strings.
+By default, data is JSON-serialized using [`JSON`](https://hexdocs.pm/elixir/JSON.html) on the Elixir side and [`json`](https://docs.python.org/3/library/json.html) on the Python side.
+Among other things, this means that Python tuples will be serialized as arrays, while Elixir atoms and binaries will be encoded as strings.
 
 ```elixir
 iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
@@ -181,6 +181,36 @@ iex> {:ok, env} = Snex.make_env(inp)
 ...>
 iex> Snex.pyeval(env, "x = ('hello', y)", %{"y" => :world}, returning: "x")
 {:ok, ["hello", "world"]}
+```
+
+Snex will encode your structs to JSON using `Snex.Serde.Encoder`.
+If no implementation is defined, `Snex.Serde.Encoder` Snex falls back to `JSON.Encoder` and its defaults.
+
+#### Binary and term serialization
+
+For high‑performance transfer of opaque data, Snex supports out‑of‑band binary channels in addition to JSON:
+
+- `Snex.Serde.binary/1` efficiently passes Elixir binaries or iodata to Python as `bytes` without JSON re‑encoding.
+- Python `bytes` returned from `:returning` are received in Elixir as binaries.
+- `Snex.Serde.term/1` wraps any Erlang term; it is carried opaquely on the Python side and decoded back to the original Erlang term when returned to Elixir.
+
+```elixir
+iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+iex> {:ok, env} = Snex.make_env(inp)
+...>
+...> # Pass iodata to Python
+iex> Snex.pyeval(env,
+...>   %{"val" => Snex.Serde.binary([<<1, 2, 3>>, 4])},
+...>   returning: "val == b'\\x01\\x02\\x03\\x04'")
+{:ok, true}
+...>
+...> # Receive Python bytes as an Elixir binary
+iex> Snex.pyeval(env, returning: "b'\\x01\\x02\\x03'")
+{:ok, <<1, 2, 3>>}
+...>
+...> # Round‑trip an arbitrary Erlang term through Python
+iex> self = self(); ref = make_ref()
+iex> {:ok, {^self, ^ref}} = Snex.pyeval(env, nil, %{"val" => Snex.Serde.term({self, ref})}, returning: "val")
 ```
 
 ### Run async code

@@ -1,10 +1,10 @@
 import ast
 import asyncio
 import functools
-import json
 import sys
 from typing import Any
 
+from . import serde
 from .models import (
     EnvID,
     ErrorCode,
@@ -24,11 +24,16 @@ envs: dict[EnvID, dict[str, Any]] = {}
 
 
 def write_response(req_id: bytes, response: Response) -> None:
-    data_json = json.dumps(response.__dict__).encode("utf-8")
-    bytes_cnt = len(req_id) + len(data_json)
+    data_list = serde.encode(response.__dict__)
+    data_len = sum(len(d) for d in data_list)
+    bytes_cnt = len(req_id) + data_len
 
     erl_out_transport.writelines(
-        [int.to_bytes(bytes_cnt, length=4, byteorder="big"), req_id, data_json],
+        [
+            int.to_bytes(bytes_cnt, length=4, byteorder="big"),
+            req_id,
+            *data_list,
+        ],
     )
 
 
@@ -93,8 +98,8 @@ async def run_eval(cmd: EvalCommand) -> Response:
     return OkResponse()
 
 
-async def run(json_data: bytes) -> Response:
-    data = json.loads(json_data)
+async def run(serialized_data: bytes) -> Response:
+    data = serde.decode(serialized_data)
 
     if data["command"] == "make_env":
         return run_make_env(MakeEnvCommand(**data))
@@ -102,10 +107,7 @@ async def run(json_data: bytes) -> Response:
     if data["command"] == "eval":
         return await run_eval(EvalCommand(**data))
 
-    return ErrorResponse(
-        ErrorCode.INTERNAL_ERROR,
-        f"Unknown command: {json_data.decode('utf-8')}",
-    )
+    return ErrorResponse(ErrorCode.INTERNAL_ERROR, f"Unknown command: {data}")
 
 
 def clean_env(env_id: EnvID) -> None:
@@ -155,15 +157,15 @@ async def run_loop() -> None:
             )
             continue
 
-        req_id = all_data[:16]
-        json_data = all_data[16:]
-
         try:
-            if json_data == b"gc":
+            req_id = all_data[:16]
+            if all_data[16:18] == b"gc":
                 clean_env(EnvID(req_id))
                 continue
 
-            task = loop.create_task(run(json_data))
+            serialized_data = all_data[16:]
+
+            task = loop.create_task(run(serialized_data))
             running_tasks.add(task)
             task.add_done_callback(
                 functools.partial(on_task_done, req_id, running_tasks),
