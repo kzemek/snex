@@ -71,8 +71,11 @@ defmodule Snex.Interpreter do
     python = System.find_executable(opts[:python])
 
     environment =
-      for {key, value} <- opts[:environment],
-          do: {~c"#{key}", ~c"#{value}"}
+      opts
+      |> Keyword.get(:environment, %{})
+      |> Map.put_new_lazy("PYTHONPATH", fn -> System.get_env("PYTHONPATH", "") end)
+      |> Map.update!("PYTHONPATH", &"#{:code.priv_dir(:snex)}:#{&1}")
+      |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
     port =
       Port.open({:spawn_executable, python}, [
@@ -80,7 +83,7 @@ defmodule Snex.Interpreter do
         :nouse_stdio,
         packet: 4,
         env: environment,
-        args: [Internal.Script.path()]
+        args: ["-m", "snex"]
       ])
 
     {:ok, %State{port: port}}
