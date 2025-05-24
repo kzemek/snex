@@ -58,7 +58,7 @@ defmodule Snex.MixProject do
         "Makefile",
         "mix.exs",
         "NOTICE",
-        "py_src/*.py",
+        "py_src/snex/*.py",
         "py_src/pyproject.toml",
         "py_src/uv.lock",
         "README.md"

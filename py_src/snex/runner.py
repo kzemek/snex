@@ -1,94 +1,26 @@
 import ast
 import asyncio
-import base64
-import enum
 import functools
 import json
-import random
 import sys
-from dataclasses import dataclass
-from enum import auto
-from typing import Any, Literal
+from typing import Any
+
+from .models import (
+    EnvID,
+    ErrorCode,
+    ErrorResponse,
+    EvalCommand,
+    MakeEnvCommand,
+    OkEnvResponse,
+    OkResponse,
+    OkValueResponse,
+    Response,
+)
 
 ID_LEN_BYTES = 16
 
-EnvID = bytes
-EnvIDStr = str
-
-
-@dataclass
-class MakeEnvCommand:
-    @dataclass
-    class FromEnv:
-        env_id: EnvIDStr
-        keys_mode: Literal["only", "except"]
-        keys: list[str]
-        command: Literal["from_env"] = "from_env"
-
-    from_env: list[FromEnv]
-    additional_vars: dict[str, Any]
-    command: Literal["make_env"] = "make_env"
-
-    def __init__(
-        self,
-        from_env: list[dict[str, Any]],
-        additional_vars: dict[str, Any],
-        command: Literal["make_env"] = "make_env",
-    ) -> None:
-        self.from_env = [self.FromEnv(**args) for args in from_env]
-        self.additional_vars = additional_vars
-        self.command = command
-
-
-@dataclass
-class EvalCommand:
-    code: str | None
-    env_id: EnvIDStr
-    returning: str | None
-    additional_vars: dict[str, Any]
-    command: Literal["eval"] = "eval"
-
-
-@dataclass
-class OkResponse:
-    status: Literal["ok"] = "ok"
-
-
-@dataclass
-class OkEnvResponse:
-    id: EnvIDStr
-    status: Literal["ok_env"] = "ok_env"
-
-
-@dataclass
-class OkValueResponse:
-    value: Any
-    status: Literal["ok_value"] = "ok_value"
-
-
-class ErrorCode(enum.StrEnum):
-    INTERNAL_ERROR = auto()
-    PYTHON_RUNTIME_ERROR = auto()
-    ENV_NOT_FOUND = auto()
-    ENV_KEY_NOT_FOUND = auto()
-
-
-@dataclass
-class ErrorResponse:
-    code: ErrorCode
-    reason: str
-    status: Literal["error"] = "error"
-
-
-Command = MakeEnvCommand | EvalCommand
-Response = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse
-
 erl_out_transport: asyncio.WriteTransport
 envs: dict[EnvID, dict[str, Any]] = {}
-
-
-def make_id() -> EnvID:
-    return random.randbytes(16)  # noqa: S311
 
 
 def write_response(req_id: bytes, response: Response) -> None:
@@ -105,7 +37,7 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
 
     for from_env_cmd in cmd.from_env:
         try:
-            from_env_id = base64.b64decode(from_env_cmd.env_id)
+            from_env_id = EnvID.deserialize(from_env_cmd.env_id)
             from_env = envs[from_env_id]
         except KeyError:
             return ErrorResponse(
@@ -123,15 +55,15 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
 
     env.update(cmd.additional_vars)
 
-    env_id: EnvID = make_id()
+    env_id = EnvID.generate()
     envs[env_id] = env
 
-    return OkEnvResponse(base64.b64encode(env_id).decode("utf-8"))
+    return OkEnvResponse(env_id.serialize())
 
 
 async def run_eval(cmd: EvalCommand) -> Response:
     try:
-        env_id = base64.b64decode(cmd.env_id)
+        env_id = EnvID.deserialize(cmd.env_id)
         env = envs[env_id]
     except KeyError:
         return ErrorResponse(
@@ -181,7 +113,7 @@ def clean_env(env_id: EnvID) -> None:
 
 
 def on_task_done(
-    req_id: EnvID,
+    req_id: bytes,
     running_tasks: set[asyncio.Task[Any]],
     task: asyncio.Task[Any],
 ) -> None:
@@ -194,7 +126,7 @@ def on_task_done(
         write_response(req_id, result)
 
 
-async def main() -> None:
+async def run_loop() -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[Any]] = set()
 
@@ -228,7 +160,7 @@ async def main() -> None:
 
         try:
             if json_data == b"gc":
-                clean_env(req_id)
+                clean_env(EnvID(req_id))
                 continue
 
             task = loop.create_task(run(json_data))
@@ -239,6 +171,3 @@ async def main() -> None:
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(ErrorCode.PYTHON_RUNTIME_ERROR, str(e))
             write_response(req_id, result)
-
-
-asyncio.run(main())
