@@ -1,82 +1,62 @@
 import base64
 import enum
 import random
-from dataclasses import dataclass
 from enum import auto
-from typing import Any, Literal
+from typing import Any, Literal, NewType, NotRequired, TypedDict
 
-EnvIDStr = str
-
-
-class EnvID(bytes):
-    __slots__ = ()
-
-    @classmethod
-    def generate(cls) -> "EnvID":
-        return cls(random.randbytes(16))  # noqa: S311
-
-    def serialize(self) -> EnvIDStr:
-        return base64.b64encode(self).decode("utf-8")
-
-    @staticmethod
-    def deserialize(s: EnvIDStr) -> "EnvID":
-        return EnvID(base64.b64decode(s))
+EnvIDStr = NewType("EnvIDStr", str)
+EnvID = NewType("EnvID", bytes)
 
 
-@dataclass
-class InitCommand:
+def env_id_generate() -> EnvID:
+    return EnvID(random.randbytes(16))  # noqa: S311
+
+
+def env_id_serialize(env_id: EnvID) -> EnvIDStr:
+    return EnvIDStr(base64.b64encode(env_id).decode("utf-8"))
+
+
+def env_id_deserialize(env_id_str: EnvIDStr) -> EnvID:
+    return EnvID(base64.b64decode(env_id_str))
+
+
+class InitCommand(TypedDict):
+    command: Literal["init"]
     code: str | None
-    command: Literal["init"] = "init"
 
 
-@dataclass
-class MakeEnvCommand:
-    @dataclass
-    class FromEnv:
-        env_id: EnvIDStr
-        keys_mode: Literal["only", "except"]
-        keys: list[str]
-        command: Literal["from_env"] = "from_env"
+class MakeEnvCommandFromEnv(TypedDict):
+    env_id: EnvIDStr
+    keys_mode: Literal["only", "except"]
+    keys: list[str]
 
-    from_env: list[FromEnv]
+
+class MakeEnvCommand(TypedDict):
+    command: Literal["make_env"]
+    from_env: list[MakeEnvCommandFromEnv]
     additional_vars: dict[str, Any]
-    command: Literal["make_env"] = "make_env"
-
-    def __init__(
-        self,
-        from_env: list[dict[str, Any]],
-        additional_vars: dict[str, Any],
-        command: Literal["make_env"] = "make_env",
-    ) -> None:
-        self.from_env = [self.FromEnv(**args) for args in from_env]
-        self.additional_vars = additional_vars
-        self.command = command
 
 
-@dataclass
-class EvalCommand:
+class EvalCommand(TypedDict):
+    command: Literal["eval"]
     code: str | None
     env_id: EnvIDStr
     returning: str | None
     additional_vars: dict[str, Any]
-    command: Literal["eval"] = "eval"
 
 
-@dataclass
-class OkResponse:
-    status: Literal["ok"] = "ok"
+class OkResponse(TypedDict):
+    status: Literal["ok"]
 
 
-@dataclass
-class OkEnvResponse:
+class OkEnvResponse(TypedDict):
+    status: Literal["ok_env"]
     id: EnvIDStr
-    status: Literal["ok_env"] = "ok_env"
 
 
-@dataclass
-class OkValueResponse:
+class OkValueResponse(TypedDict):
+    status: Literal["ok_value"]
     value: Any
-    status: Literal["ok_value"] = "ok_value"
 
 
 class ErrorCode(enum.StrEnum):
@@ -86,12 +66,11 @@ class ErrorCode(enum.StrEnum):
     ENV_KEY_NOT_FOUND = auto()
 
 
-@dataclass
-class ErrorResponse:
+class ErrorResponse(TypedDict):
+    status: Literal["error"]
     code: ErrorCode
     reason: str
-    traceback: list[str] | None = None
-    status: Literal["error"] = "error"
+    traceback: NotRequired[list[str] | None]
 
 
 Command = MakeEnvCommand | EvalCommand
