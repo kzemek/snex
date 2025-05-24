@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ast
 import asyncio
 import functools
@@ -7,8 +9,8 @@ from typing import Any
 
 from . import models, serde
 from .models import (
+    Command,
     EnvID,
-    ErrorCode,
     ErrorResponse,
     EvalCommand,
     InitCommand,
@@ -64,7 +66,7 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
         except KeyError:
             return ErrorResponse(
                 status="error",
-                code=ErrorCode.ENV_NOT_FOUND,
+                code="env_not_found",
                 reason="Environment {from_env_cmd.env_id} not found",
             )
 
@@ -93,7 +95,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
     except KeyError:
         return ErrorResponse(
             status="error",
-            code=ErrorCode.ENV_NOT_FOUND,
+            code="env_not_found",
             reason=f"Environment {env_id_str} not found",
         )
 
@@ -110,7 +112,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
         except KeyError as e:
             return ErrorResponse(
                 status="error",
-                code=ErrorCode.ENV_KEY_NOT_FOUND,
+                code="env_key_not_found",
                 reason=f"Key {e.args[0]} not found in environment {env_id_str}",
             )
 
@@ -118,7 +120,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
 
 
 async def run(serialized_data: bytes) -> Response:
-    data = serde.decode(serialized_data)
+    data: Command = serde.decode(serialized_data)
 
     if data["command"] == "init":
         return await run_init(data)
@@ -131,7 +133,7 @@ async def run(serialized_data: bytes) -> Response:
 
     return ErrorResponse(
         status="error",
-        code=ErrorCode.INTERNAL_ERROR,
+        code="internal_error",
         reason=f"Unknown command: {data}",
     )
 
@@ -152,7 +154,7 @@ def on_task_done(
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
-            code=ErrorCode.PYTHON_RUNTIME_ERROR,
+            code="python_runtime_error",
             reason=str(e),
             traceback=traceback.format_exception(e),
         )
@@ -204,7 +206,7 @@ async def run_loop() -> None:
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
-                code=ErrorCode.PYTHON_RUNTIME_ERROR,
+                code="python_runtime_error",
                 reason=str(e),
                 traceback=traceback.format_exception(e),
             )
