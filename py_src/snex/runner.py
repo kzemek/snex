@@ -5,7 +5,7 @@ import sys
 import traceback
 from typing import Any
 
-from . import serde
+from . import models, serde
 from .models import (
     EnvID,
     ErrorCode,
@@ -27,7 +27,7 @@ envs: dict[EnvID, dict[str, Any]] = {}
 
 
 def write_response(req_id: bytes, response: Response) -> None:
-    data_list = serde.encode(response.__dict__)
+    data_list = serde.encode(response)
     data_len = sum(len(d) for d in data_list)
     bytes_cnt = len(req_id) + data_len
 
@@ -48,83 +48,92 @@ async def run_code(code: str, env: dict[str, Any]) -> None:
 
 
 async def run_init(cmd: InitCommand) -> Response:
-    if cmd.code:
-        await run_code(cmd.code, root_env)
+    if cmd["code"]:
+        await run_code(cmd["code"], root_env)
 
-    return OkResponse()
+    return OkResponse(status="ok")
 
 
 def run_make_env(cmd: MakeEnvCommand) -> Response:
     env = root_env.copy()
 
-    for from_env_cmd in cmd.from_env:
+    for from_env_cmd in cmd["from_env"]:
         try:
-            from_env_id = EnvID.deserialize(from_env_cmd.env_id)
+            from_env_id = models.env_id_deserialize(from_env_cmd["env_id"])
             from_env = envs[from_env_id]
         except KeyError:
             return ErrorResponse(
-                ErrorCode.ENV_NOT_FOUND,
-                "Environment {from_env_cmd.env_id} not found",
+                status="error",
+                code=ErrorCode.ENV_NOT_FOUND,
+                reason="Environment {from_env_cmd.env_id} not found",
             )
 
-        if from_env_cmd.keys_mode == "only":
-            for key in from_env_cmd.keys:
+        keys = set(from_env_cmd["keys"])
+        if from_env_cmd["keys_mode"] == "only":
+            for key in keys:
                 env[key] = from_env.get(key)
         else:
             for key in from_env:
-                if key not in from_env_cmd.keys:
+                if key not in keys:
                     env[key] = from_env[key]
 
-    env.update(cmd.additional_vars)
+    env.update(cmd["additional_vars"])
 
-    env_id = EnvID.generate()
+    env_id = models.env_id_generate()
     envs[env_id] = env
 
-    return OkEnvResponse(env_id.serialize())
+    return OkEnvResponse(status="ok_env", id=models.env_id_serialize(env_id))
 
 
 async def run_eval(cmd: EvalCommand) -> Response:
+    env_id_str = cmd["env_id"]
     try:
-        env_id = EnvID.deserialize(cmd.env_id)
+        env_id = models.env_id_deserialize(env_id_str)
         env = envs[env_id]
     except KeyError:
         return ErrorResponse(
-            ErrorCode.ENV_NOT_FOUND,
-            f"Environment {cmd.env_id} not found",
+            status="error",
+            code=ErrorCode.ENV_NOT_FOUND,
+            reason=f"Environment {env_id_str} not found",
         )
 
-    for key, value in cmd.additional_vars.items():
+    for key, value in cmd["additional_vars"].items():
         env[key] = value
 
-    if cmd.code:
-        await run_code(cmd.code, env)
+    if cmd["code"]:
+        await run_code(cmd["code"], env)
 
-    if cmd.returning:
+    if cmd["returning"]:
         try:
-            value = eval(cmd.returning, env, env)  # noqa: S307
-            return OkValueResponse(value)
+            value = eval(cmd["returning"], env, env)  # noqa: S307
+            return OkValueResponse(status="ok_value", value=value)
         except KeyError as e:
             return ErrorResponse(
-                ErrorCode.ENV_KEY_NOT_FOUND,
-                f"Key {e.args[0]} not found in environment {cmd.env_id}",
+                status="error",
+                code=ErrorCode.ENV_KEY_NOT_FOUND,
+                reason=f"Key {e.args[0]} not found in environment {env_id_str}",
             )
 
-    return OkResponse()
+    return OkResponse(status="ok")
 
 
 async def run(serialized_data: bytes) -> Response:
     data = serde.decode(serialized_data)
 
     if data["command"] == "init":
-        return await run_init(InitCommand(**data))
+        return await run_init(data)
 
     if data["command"] == "make_env":
-        return run_make_env(MakeEnvCommand(**data))
+        return run_make_env(data)
 
     if data["command"] == "eval":
-        return await run_eval(EvalCommand(**data))
+        return await run_eval(data)
 
-    return ErrorResponse(ErrorCode.INTERNAL_ERROR, f"Unknown command: {data}")
+    return ErrorResponse(
+        status="error",
+        code=ErrorCode.INTERNAL_ERROR,
+        reason=f"Unknown command: {data}",
+    )
 
 
 def clean_env(env_id: EnvID) -> None:
@@ -142,9 +151,10 @@ def on_task_done(
         write_response(req_id, task.result())
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
-            ErrorCode.PYTHON_RUNTIME_ERROR,
-            str(e),
-            traceback.format_exception(e),
+            status="error",
+            code=ErrorCode.PYTHON_RUNTIME_ERROR,
+            reason=str(e),
+            traceback=traceback.format_exception(e),
         )
         write_response(req_id, result)
 
@@ -193,8 +203,9 @@ async def run_loop() -> None:
             )
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
-                ErrorCode.PYTHON_RUNTIME_ERROR,
-                str(e),
-                traceback.format_exception(e),
+                status="error",
+                code=ErrorCode.PYTHON_RUNTIME_ERROR,
+                reason=str(e),
+                traceback=traceback.format_exception(e),
             )
             write_response(req_id, result)
