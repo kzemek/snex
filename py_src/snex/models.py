@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import base64
-import enum
 import random
-from enum import auto
-from typing import Any, Literal, NewType, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, NewType, TypedDict
+
+if TYPE_CHECKING:
+    from typing import NotRequired
+
 
 EnvIDStr = NewType("EnvIDStr", str)
 EnvID = NewType("EnvID", bytes)
@@ -59,19 +63,17 @@ class OkValueResponse(TypedDict):
     value: Any
 
 
-class ErrorCode(enum.StrEnum):
-    INTERNAL_ERROR = auto()
-    PYTHON_RUNTIME_ERROR = auto()
-    ENV_NOT_FOUND = auto()
-    ENV_KEY_NOT_FOUND = auto()
-
-
 class ErrorResponse(TypedDict):
     status: Literal["error"]
-    code: ErrorCode
+    code: Literal[
+        "internal_error",
+        "python_runtime_error",
+        "env_not_found",
+        "env_key_not_found",
+    ]
     reason: str
     traceback: NotRequired[list[str] | None]
 
 
-Command = MakeEnvCommand | EvalCommand
+Command = InitCommand | MakeEnvCommand | EvalCommand
 Response = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse

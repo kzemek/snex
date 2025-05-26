@@ -30,7 +30,7 @@ defmodule SnexTest.NumpyInterpreter do
     [project]
     name = "my-numpy-project"
     version = "0.0.0"
-    requires-python = "==3.11.*"
+    requires-python = "==3.10.*"
     dependencies = ["numpy>=2"]
     """
 end
@@ -51,7 +51,7 @@ iex> Snex.pyeval(env, """
 - [uv](https://github.com/astral-sh/uv) `>= 0.6.8` -
   a fast Python package & project manager, used by Snex to create and manage Python environments.
   It has to be available at compilation time but isn't needed at runtime.
-- Python `>= 3.11` -
+- Python `>= 3.10` -
   this is the minimum supported version you can run your scripts with.
   You don't need to have it installed — Snex will fetch it with `uv`.
 
@@ -80,7 +80,7 @@ defmodule SnexTest.NumpyInterpreter do
     [project]
     name = "my-numpy-project"
     version = "0.0.0"
-    requires-python = "==3.11.*"
+    requires-python = "==3.10.*"
     dependencies = ["numpy>=2"]
     """
 end

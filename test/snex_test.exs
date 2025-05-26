@@ -1,6 +1,8 @@
 defmodule SnexTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   doctest_file("README.md")
 
   setup do
@@ -61,6 +63,27 @@ defmodule SnexTest do
                 code: :python_runtime_error,
                 reason: "Object of type module is not JSON serializable"
               }} = Snex.pyeval(env, "import datetime", returning: "datetime")
+    end
+
+    test "the interpreter exits on Python fatal error" do
+      {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+      Process.unlink(inp)
+
+      monitor_ref = Process.monitor(inp)
+      %{port: port} = :sys.get_state(inp)
+      {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
+
+      log =
+        capture_log(
+          [level: :error],
+          fn ->
+            assert {_, 0} = System.cmd("kill", ~w[-SIGTERM #{os_pid}])
+            assert_receive {:DOWN, ^monitor_ref, :process, ^inp, {:exit_status, 143}}
+          end
+        )
+
+      assert log =~ "GenServer #{inspect(inp)} terminating"
+      assert log =~ "(stop) {:exit_status, 143}"
     end
   end
 end

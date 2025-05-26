@@ -25,6 +25,12 @@
 
 - **Add Python traceback to Elixir-side errors emitted by Snex**
 
+- **Drop down Python version requirement to `3.10`**
+
+### Fixes
+
+- **Make sure `Snex.Interpreter` process stops when Python interpreter process dies**
+
 ### Changes
 
 - **Split Python script into multiple files**

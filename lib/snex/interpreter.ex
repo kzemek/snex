@@ -86,6 +86,7 @@ defmodule Snex.Interpreter do
     port =
       Port.open({:spawn_executable, python}, [
         :binary,
+        :exit_status,
         :nouse_stdio,
         packet: 4,
         env: environment,
@@ -122,6 +123,15 @@ defmodule Snex.Interpreter do
     end
 
     {:noreply, %{state | pending: pending}}
+  end
+
+  def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
+    {:stop, {:exit_status, status}, state}
+  end
+
+  def handle_info(message, state) do
+    Logger.warning("Received unexpected message: #{inspect(message)}")
+    {:noreply, state}
   end
 
   defp run_command(command, port) do
