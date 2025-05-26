@@ -1,12 +1,16 @@
 defmodule Snex.Serde.Binary do
+  @moduledoc false
   @enforce_keys [:value]
   defstruct [:value]
-  @type t :: %__MODULE__{value: binary()}
+  @typedoc false
+  @type t :: %__MODULE__{value: iodata()}
 end
 
 defmodule Snex.Serde.Term do
+  @moduledoc false
   @enforce_keys [:value]
   defstruct [:value]
+  @typedoc false
   @type t :: %__MODULE__{value: term()}
 end
 
@@ -38,6 +42,8 @@ defmodule Snex.Serde do
   @binary_acc_key {__MODULE__, :binary_acc}
 
   @type encoder :: (term(), encoder() -> iodata())
+  @opaque serde_binary :: Snex.Serde.Binary.t()
+  @opaque serde_term :: Snex.Serde.Term.t()
 
   @spec encode_to_iodata!(term(), encoder()) :: iodata()
   def encode_to_iodata!(term, encoder \\ &protocol_encode/2) do
@@ -58,8 +64,13 @@ defmodule Snex.Serde do
          do: {:ok, decoded}
   end
 
-  def binary(value) when is_binary(value), do: %Snex.Serde.Binary{value: value}
-  def term(value), do: %Snex.Serde.Term{value: value}
+  @spec binary(iodata()) :: serde_binary()
+  def binary(value) when is_binary(value) or is_list(value),
+    do: %Snex.Serde.Binary{value: value}
+
+  @spec term(term()) :: serde_term()
+  def term(value),
+    do: %Snex.Serde.Term{value: value}
 
   @spec protocol_encode(term(), encoder()) :: iodata()
   def protocol_encode(struct, encoder) when is_struct(struct),
@@ -78,8 +89,9 @@ defmodule Snex.Serde do
     case Process.get(@binary_acc_key) do
       {binary_acc, binary_offset} ->
         data = if tag == "binary", do: value, else: :erlang.term_to_binary(value)
-        Process.put(@binary_acc_key, {[data | binary_acc], binary_offset + byte_size(data)})
-        encoder.(%{"__snex__" => [tag, binary_offset, byte_size(data)]}, encoder)
+        len = IO.iodata_length(data)
+        Process.put(@binary_acc_key, {[data | binary_acc], binary_offset + len})
+        encoder.(%{"__snex__" => [tag, binary_offset, len]}, encoder)
 
       _ ->
         encoder.(value, encoder)

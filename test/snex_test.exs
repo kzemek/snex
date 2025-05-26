@@ -18,6 +18,13 @@ defmodule SnexTest do
                )
     end
 
+    test "iodata can be passed to Python", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(env, nil, %{"val" => Snex.Serde.binary([<<1, 2, 3>>, <<4, 5, 6>>])},
+                 returning: "val == b'\\x01\\x02\\x03\\x04\\x05\\x06'"
+               )
+    end
+
     test "binary can be got from Python", %{env: env} do
       assert {:ok, <<1, 2, 3>>} = Snex.pyeval(env, returning: "b'\\x01\\x02\\x03'")
     end
