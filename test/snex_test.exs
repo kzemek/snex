@@ -55,6 +55,17 @@ defmodule SnexTest do
     end
   end
 
+  describe "sending" do
+    test "can send from Python", %{env: env} do
+      assert :ok =
+               Snex.pyeval(env, "snex.send(self, b'hello from snex')", %{
+                 "self" => Snex.Serde.term(self())
+               })
+
+      assert_receive "hello from snex"
+    end
+  end
+
   describe "error handling" do
     test "unserializable value in make_eval", %{inp: inp} do
       assert {:error, %Protocol.UndefinedError{}} = Snex.make_env(inp, %{"x" => make_ref()})

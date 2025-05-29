@@ -28,6 +28,9 @@ defmodule Snex.Interpreter do
 
   require Logger
 
+  @request 0
+  @response 1
+
   @typedoc """
   Running instance of `Snex.Interpreter`.
   """
@@ -96,7 +99,7 @@ defmodule Snex.Interpreter do
     id = run_command(%Commands.Init{code: opts[:init_script]}, port)
 
     receive do
-      {^port, {:data, <<^id::binary, response::binary>>}} ->
+      {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
         :ok = decode_reply(response, port)
     end
 
@@ -112,7 +115,10 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  def handle_info({port, {:data, <<id::binary-size(16), data::binary>>}}, %{port: port} = state) do
+  def handle_info(
+        {port, {:data, <<id::binary-size(16), @response, data::binary>>}},
+        %{port: port} = state
+      ) do
     {client, pending} = Map.pop(state.pending, id)
 
     if client do
@@ -123,6 +129,18 @@ defmodule Snex.Interpreter do
     end
 
     {:noreply, %{state | pending: pending}}
+  end
+
+  def handle_info(
+        {port, {:data, <<_id::binary-size(16), @request, data::binary>>}},
+        %{port: port} = state
+      ) do
+    case Snex.Serde.decode(data) do
+      {:ok, %{"command" => "send", "to" => to, "data" => data}} ->
+        send(to, data)
+    end
+
+    {:noreply, state}
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
@@ -137,7 +155,7 @@ defmodule Snex.Interpreter do
   defp run_command(command, port) do
     id = :rand.bytes(16)
     data = Snex.Serde.encode_to_iodata!(command)
-    Port.command(port, [id, data])
+    Port.command(port, [id, @request, data])
     id
   end
 

@@ -7,7 +7,7 @@ import sys
 import traceback
 from typing import Any
 
-from . import models, serde
+from . import interface, models, serde, transport
 from .models import (
     Command,
     EnvID,
@@ -23,23 +23,8 @@ from .models import (
 
 ID_LEN_BYTES = 16
 
-erl_out_transport: asyncio.WriteTransport
 root_env: dict[str, Any] = {}
 envs: dict[EnvID, dict[str, Any]] = {}
-
-
-def write_response(req_id: bytes, response: Response) -> None:
-    data_list = serde.encode(response)
-    data_len = sum(len(d) for d in data_list)
-    bytes_cnt = len(req_id) + data_len
-
-    erl_out_transport.writelines(
-        [
-            int.to_bytes(bytes_cnt, length=4, byteorder="big"),
-            req_id,
-            *data_list,
-        ],
-    )
 
 
 async def run_code(code: str, env: dict[str, Any]) -> None:
@@ -143,6 +128,7 @@ def clean_env(env_id: EnvID) -> None:
 
 
 def on_task_done(
+    writer: asyncio.WriteTransport,
     req_id: bytes,
     running_tasks: set[asyncio.Task[Any]],
     task: asyncio.Task[Any],
@@ -150,7 +136,7 @@ def on_task_done(
     running_tasks.discard(task)
 
     try:
-        write_response(req_id, task.result())
+        transport.write_response(writer, req_id, task.result())
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -158,22 +144,15 @@ def on_task_done(
             reason=str(e),
             traceback=traceback.format_exception(e),
         )
-        write_response(req_id, result)
+        transport.write_response(writer, req_id, result)
 
 
 async def run_loop() -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[Any]] = set()
 
-    erl_in = open(3, "rb", 0)  # noqa: ASYNC230, SIM115
-    erl_out = open(4, "wb", 0)  # noqa: ASYNC230, SIM115
-
-    global erl_out_transport
-    erl_out_transport, _ = await loop.connect_write_pipe(asyncio.Protocol, erl_out)
-
-    reader = asyncio.StreamReader()
-    reader_protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: reader_protocol, erl_in)
+    reader, writer = await transport.setup_io(loop)
+    root_env["snex"] = interface.Snex(writer)
 
     while True:
         try:
@@ -196,12 +175,16 @@ async def run_loop() -> None:
                 clean_env(EnvID(req_id))
                 continue
 
-            serialized_data = all_data[16:]
+            if all_data[16] != transport.MessageType.REQUEST:
+                msg = f"Invalid message type: request expected, got {all_data[16]}"
+                raise ValueError(msg)  # noqa: TRY301
+
+            serialized_data = all_data[17:]
 
             task = loop.create_task(run(serialized_data))
             running_tasks.add(task)
             task.add_done_callback(
-                functools.partial(on_task_done, req_id, running_tasks),
+                functools.partial(on_task_done, writer, req_id, running_tasks),
             )
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
@@ -210,4 +193,4 @@ async def run_loop() -> None:
                 reason=str(e),
                 traceback=traceback.format_exception(e),
             )
-            write_response(req_id, result)
+            transport.write_response(writer, req_id, result)
