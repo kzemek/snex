@@ -21,6 +21,11 @@
   Failing to run the script will cause the process initialization to error.
   The variable context left by the script will become the initial context for all `Snex.make_env/3` calls using this interpreter.
 
+- **Add support for sending BEAM messages from within Python code**
+
+  BEAM messages can now be sent asynchronously from Python code.
+  See README for description and an example.
+
 - **Make `start_link/1` overridable when deriving `Snex.CustomInterpreter`**
 
 - **Add Python traceback to Elixir-side errors emitted by Snex**

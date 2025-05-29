@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal, NewType, TypedDict
 if TYPE_CHECKING:
     from typing import NotRequired
 
+    from .serde import ErlangTerm
+
 
 EnvIDStr = NewType("EnvIDStr", str)
 EnvID = NewType("EnvID", bytes)
@@ -63,6 +65,12 @@ class OkValueResponse(TypedDict):
     value: Any
 
 
+class SendCommand(TypedDict):
+    command: Literal["send"]
+    to: ErlangTerm
+    data: Any
+
+
 class ErrorResponse(TypedDict):
     status: Literal["error"]
     code: Literal[
@@ -76,4 +84,5 @@ class ErrorResponse(TypedDict):
 
 
 Command = InitCommand | MakeEnvCommand | EvalCommand
+Request = SendCommand
 Response = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse

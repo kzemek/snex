@@ -52,6 +52,17 @@ defmodule SnexTest do
     end
   end
 
+  describe "sending" do
+    test "can send from Python", %{env: env} do
+      assert :ok =
+               Snex.pyeval(env, "snex.send(self, b'hello from snex')", %{
+                 "self" => Snex.Serde.term(self())
+               })
+
+      assert_receive "hello from snex"
+    end
+  end
+
   describe "returning" do
     test "return an Elixir list of a single value", %{env: env} do
       assert {:ok, [42]} = Snex.pyeval(env, returning: ["42"])
