@@ -165,7 +165,7 @@ defmodule Snex.Interpreter do
         :ok
 
       {:ok, %{"status" => "ok_env", "id" => env_id}} ->
-        {:ok, env_id |> Base.decode64!() |> Snex.Env.make(port, self())}
+        {:ok, Snex.Env.make(env_id, port, self())}
 
       {:ok, %{"status" => "ok_value", "value" => value}} ->
         {:ok, value}

@@ -12,19 +12,27 @@ class ErlangTerm(bytes):
 def decode(data: bytes) -> Any:  # noqa: ANN401
     binary_data_len = int.from_bytes(data[:4], "big")
     binary_data = data[4 : 4 + binary_data_len]
+    offset = 0
     json_data = data[4 + binary_data_len :]
 
     def decode_object_hook(
         binary_data: bytes,
         obj: dict[str, Any],
     ) -> Any:  # noqa: ANN401
-        match obj.get("__snex__"):
-            case ["binary", offset, size]:
-                return binary_data[offset : offset + size]
-            case ["term", offset, size]:
-                return ErlangTerm(binary_data[offset : offset + size])
-            case _:
-                return obj
+        nonlocal offset
+
+        if "__snex__" in obj:
+            tag, size = obj["__snex__"]
+            data = binary_data[offset : offset + size]
+            offset += size
+
+            match tag:
+                case "term":
+                    return ErlangTerm(data)
+                case _:
+                    return data
+
+        return obj
 
     return json.loads(
         json_data,
@@ -35,12 +43,12 @@ def decode(data: bytes) -> Any:  # noqa: ANN401
 def encode(o: Any) -> list[bytes | bytearray]:  # noqa: ANN401
     def encode_default(binary_data: bytearray, o: Any) -> Any:  # noqa: ANN401
         if isinstance(o, ErlangTerm):
-            ret = {"__snex__": ["term", len(binary_data), len(o)]}
+            ret = {"__snex__": ["term", len(o)]}
             binary_data.extend(o)
             return ret
 
         if isinstance(o, bytes):
-            ret = {"__snex__": ["binary", len(binary_data), len(o)]}
+            ret = {"__snex__": ["binary", len(o)]}
             binary_data.extend(o)
             return ret
 
