@@ -42,7 +42,12 @@ end
 
 defimpl Snex.Serde.Encoder, for: Snex.Serde.Term do
   def encode(%Snex.Serde.Term{value: value}, encoder),
-    do: Snex.Serde.binary_encode("term", value, encoder)
+    do: Snex.Serde.binary_encode("term", :erlang.term_to_binary(value), encoder)
+end
+
+defimpl Snex.Serde.Encoder, for: Snex.Env do
+  def encode(%Snex.Env{id: id}, encoder),
+    do: Snex.Serde.binary_encode("env", id, encoder)
 end
 
 defimpl Snex.Serde.Encoder, for: Any do
@@ -68,10 +73,10 @@ defmodule Snex.Serde do
   @doc false
   @spec encode_to_iodata!(term(), encoder()) :: iodata()
   def encode_to_iodata!(term, encoder \\ &protocol_encode/2) do
-    Process.put(@binary_acc_key, {[], 0})
+    Process.put(@binary_acc_key, [])
     data = encoder.(term, encoder)
-    {binary_acc, binary_len} = Process.get(@binary_acc_key)
-    [<<binary_len::32>>, Enum.reverse(binary_acc), data]
+    binary_acc = Process.get(@binary_acc_key) |> Enum.reverse()
+    [<<IO.iodata_length(binary_acc)::32>>, binary_acc, data]
   after
     Process.delete(@binary_acc_key)
   end
@@ -80,11 +85,13 @@ defmodule Snex.Serde do
   @spec decode(binary()) :: {:ok, term()} | {:error, :trailing_data | term()}
   def decode(binary) when is_binary(binary) do
     <<binary_len::32, binary_data::binary-size(binary_len), json::binary>> = binary
-    decoders = [object_finish: &decode_object_finish(&1, &2, binary_data)]
+    Process.put(@binary_acc_key, binary_data)
 
-    with {decoded, _acc, rest} <- JSON.decode(json, [], decoders),
+    with {decoded, _acc, rest} <- JSON.decode(json, [], object_finish: &decode_object_finish/2),
          true <- String.trim(rest) == "" || {:error, :trailing_data},
          do: {:ok, decoded}
+  after
+    Process.delete(@binary_acc_key)
   end
 
   @doc """
@@ -116,24 +123,19 @@ defmodule Snex.Serde do
 
   @doc false
   # Common implementation for encoding out-of-json binary data
-  @spec binary_encode(binary(), term(), encoder()) :: iodata()
-  def binary_encode(tag, value, encoder) when tag in ~w[binary term] do
-    case Process.get(@binary_acc_key) do
-      {binary_acc, binary_offset} ->
-        data = if tag == "binary", do: value, else: :erlang.term_to_binary(value)
-        len = IO.iodata_length(data)
-        Process.put(@binary_acc_key, {[data | binary_acc], binary_offset + len})
-        encoder.(%{"__snex__" => [tag, binary_offset, len]}, encoder)
-
-      _ ->
-        encoder.(value, encoder)
-    end
+  @spec binary_encode(binary(), iodata(), encoder()) :: iodata()
+  def binary_encode(tag, data, encoder) when tag in ~w[binary term env] do
+    binary_acc = Process.get(@binary_acc_key)
+    len = IO.iodata_length(data)
+    Process.put(@binary_acc_key, [data | binary_acc])
+    encoder.(%{"__snex__" => [tag, len]}, encoder)
   end
 
-  defp decode_object_finish(acc, old_acc, binary_data) do
+  defp decode_object_finish(acc, old_acc) do
     case Map.new(acc) do
-      %{"__snex__" => [tag, offset, size]} ->
-        data = binary_part(binary_data, offset, size)
+      %{"__snex__" => [tag, size]} ->
+        <<data::binary-size(size), rest::binary>> = Process.get(@binary_acc_key)
+        Process.put(@binary_acc_key, rest)
         value = if tag == "binary", do: data, else: :erlang.binary_to_term(data)
         {value, old_acc}
 

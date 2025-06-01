@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import base64
 import functools
 import sys
 import traceback
 from typing import Any
 
-from . import interface, models, serde, transport
+from . import interface, serde, transport
 from .models import (
     Command,
     EnvID,
@@ -19,12 +20,17 @@ from .models import (
     OkResponse,
     OkValueResponse,
     Response,
+    generate_id,
 )
 
 ID_LEN_BYTES = 16
 
 root_env: dict[str, Any] = {}
 envs: dict[EnvID, dict[str, Any]] = {}
+
+
+def env_id_to_str(env_id: EnvID) -> str:
+    return base64.b64encode(env_id).decode()
 
 
 async def run_code(code: str, env: dict[str, Any]) -> None:
@@ -45,14 +51,14 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
     env = root_env.copy()
 
     for from_env_cmd in cmd["from_env"]:
+        env_id = from_env_cmd["env"]
         try:
-            from_env_id = models.env_id_deserialize(from_env_cmd["env_id"])
-            from_env = envs[from_env_id]
+            from_env = envs[env_id]
         except KeyError:
             return ErrorResponse(
                 status="error",
                 code="env_not_found",
-                reason="Environment {from_env_cmd.env_id} not found",
+                reason=f"Environment {env_id_to_str(env_id)} not found",
             )
 
         keys = set(from_env_cmd["keys"])
@@ -66,22 +72,21 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
 
     env.update(cmd["additional_vars"])
 
-    env_id = models.env_id_generate()
+    env_id = EnvID(generate_id())
     envs[env_id] = env
 
-    return OkEnvResponse(status="ok_env", id=models.env_id_serialize(env_id))
+    return OkEnvResponse(status="ok_env", id=env_id)
 
 
 async def run_eval(cmd: EvalCommand) -> Response:
-    env_id_str = cmd["env_id"]
+    env_id = cmd["env"]
     try:
-        env_id = models.env_id_deserialize(env_id_str)
         env = envs[env_id]
     except KeyError:
         return ErrorResponse(
             status="error",
             code="env_not_found",
-            reason=f"Environment {env_id_str} not found",
+            reason=f"Environment {env_id_to_str(env_id)} not found",
         )
 
     for key, value in cmd["additional_vars"].items():
@@ -95,10 +100,12 @@ async def run_eval(cmd: EvalCommand) -> Response:
             value = eval(cmd["returning"], env, env)  # noqa: S307
             return OkValueResponse(status="ok_value", value=value)
         except KeyError as e:
+            key = e.args[0]
+            env_id_str = env_id_to_str(env_id)
             return ErrorResponse(
                 status="error",
                 code="env_key_not_found",
-                reason=f"Key {e.args[0]} not found in environment {env_id_str}",
+                reason=f"Key {key} not found in environment {env_id_str}",
             )
 
     return OkResponse(status="ok")

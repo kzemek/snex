@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import random
 from typing import TYPE_CHECKING, Any, Literal, NewType, TypedDict
 
@@ -10,20 +9,11 @@ if TYPE_CHECKING:
     from .serde import ErlangTerm
 
 
-EnvIDStr = NewType("EnvIDStr", str)
 EnvID = NewType("EnvID", bytes)
 
 
-def env_id_generate() -> EnvID:
-    return EnvID(random.randbytes(16))  # noqa: S311
-
-
-def env_id_serialize(env_id: EnvID) -> EnvIDStr:
-    return EnvIDStr(base64.b64encode(env_id).decode("utf-8"))
-
-
-def env_id_deserialize(env_id_str: EnvIDStr) -> EnvID:
-    return EnvID(base64.b64decode(env_id_str))
+def generate_id() -> bytes:
+    return random.randbytes(16)  # noqa: S311
 
 
 class InitCommand(TypedDict):
@@ -32,7 +22,7 @@ class InitCommand(TypedDict):
 
 
 class MakeEnvCommandFromEnv(TypedDict):
-    env_id: EnvIDStr
+    env: EnvID
     keys_mode: Literal["only", "except"]
     keys: list[str]
 
@@ -46,7 +36,7 @@ class MakeEnvCommand(TypedDict):
 class EvalCommand(TypedDict):
     command: Literal["eval"]
     code: str | None
-    env_id: EnvIDStr
+    env: EnvID
     returning: str | None
     additional_vars: dict[str, Any]
 
@@ -57,7 +47,7 @@ class OkResponse(TypedDict):
 
 class OkEnvResponse(TypedDict):
     status: Literal["ok_env"]
-    id: EnvIDStr
+    id: EnvID
 
 
 class OkValueResponse(TypedDict):

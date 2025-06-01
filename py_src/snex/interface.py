@@ -2,7 +2,7 @@ import asyncio
 from asyncio import AbstractEventLoop
 from typing import Any
 
-from .models import SendCommand, env_id_generate
+from .models import SendCommand, generate_id
 from .serde import ErlangTerm
 from .transport import write_request
 
@@ -19,6 +19,6 @@ class Snex:
         self._main_loop.call_soon_threadsafe(
             write_request,
             self._writer,
-            env_id_generate(),
+            generate_id(),
             SendCommand(command="send", to=to, data=data),
         )
