@@ -51,6 +51,23 @@ defmodule Snex.Internal.CustomInterpreter do
     quote do
       unquote(external_resources_quote)
 
+      def __mix_recompile__? do
+        %{project_dir: project_dir, python_install_dir: python_install_dir, venv_dir: venv_dir} =
+          unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
+
+        {_out, retcode} =
+          unquote(__MODULE__).uv_cmd(
+            unquote(args.uv),
+            ~w[sync --check],
+            "",
+            project_dir,
+            python_install_dir,
+            venv_dir
+          )
+
+        retcode != 0
+      end
+
       def start_link(opts \\ []) do
         %{venv_dir: venv_dir, venv_bin_dir: venv_bin_dir} =
           unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
@@ -73,7 +90,7 @@ defmodule Snex.Internal.CustomInterpreter do
         )
       end
 
-      defoverridable start_link: 1, child_spec: 1
+      defoverridable __mix_recompile__?: 0, start_link: 1, child_spec: 1
     end
   end
 
@@ -88,21 +105,28 @@ defmodule Snex.Internal.CustomInterpreter do
     """)
 
     with {_, retcode} when retcode != 0 <-
-           System.cmd(args.uv, ~w[--managed-python sync],
-             into: IO.stream(),
-             stderr_to_stdout: true,
-             cd: project_dir,
-             env: %{
-               "UV_PYTHON_INSTALL_DIR" => python_install_dir,
-               "UV_PROJECT_ENVIRONMENT" => venv_dir
-             }
-           ) do
+           uv_cmd(args.uv, ["sync"], IO.stream(), project_dir, python_install_dir, venv_dir) do
       File.rm_rf!(venv_dir)
       raise "uv sync failed"
     end
 
     IO.puts("")
     :ok
+  end
+
+  @doc false
+  @spec uv_cmd(String.t(), [String.t()], Collectable.t(), Path.t(), Path.t(), Path.t()) ::
+          {String.t(), integer()}
+  def uv_cmd(uv, args, into, project_dir, python_install_dir, venv_dir) do
+    System.cmd(uv, ["--managed-python" | args],
+      into: into,
+      stderr_to_stdout: true,
+      cd: project_dir,
+      env: %{
+        "UV_PYTHON_INSTALL_DIR" => python_install_dir,
+        "UV_PROJECT_ENVIRONMENT" => venv_dir
+      }
+    )
   end
 
   defp copy_inline_project_files(project_dir, pyproject_toml) do

@@ -49,3 +49,7 @@
   Previously, only `:python` and `:environment` options could be customized and other options were discarded.
 
 - **Retype Python commands as `TypedDict`**
+
+- **Add overridable `__mix_recompile?__` implementation for `use Snex.Interpreter`**
+
+  The default implementation will recompile your custom interpreter if `uv sync --check` reports stale state.
