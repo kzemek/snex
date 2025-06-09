@@ -53,3 +53,5 @@
 - **Add overridable `__mix_recompile?__` implementation for `use Snex.Interpreter`**
 
   The default implementation will recompile your custom interpreter if `uv sync --check` reports stale state.
+
+- **Do not instal dev dependencies from pyproject.toml**
