@@ -56,9 +56,9 @@ defmodule Snex.Internal.CustomInterpreter do
           unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
 
         {_out, retcode} =
-          unquote(__MODULE__).uv_cmd(
+          unquote(__MODULE__).uv_cmd_sync(
             unquote(args.uv),
-            ~w[sync --check],
+            ["--check"],
             "",
             project_dir,
             python_install_dir,
@@ -105,7 +105,7 @@ defmodule Snex.Internal.CustomInterpreter do
     """)
 
     with {_, retcode} when retcode != 0 <-
-           uv_cmd(args.uv, ["sync"], IO.stream(), project_dir, python_install_dir, venv_dir) do
+           uv_cmd_sync(args.uv, [], IO.stream(), project_dir, python_install_dir, venv_dir) do
       File.rm_rf!(venv_dir)
       raise "uv sync failed"
     end
@@ -115,10 +115,10 @@ defmodule Snex.Internal.CustomInterpreter do
   end
 
   @doc false
-  @spec uv_cmd(String.t(), [String.t()], Collectable.t(), Path.t(), Path.t(), Path.t()) ::
+  @spec uv_cmd_sync(String.t(), [String.t()], Collectable.t(), Path.t(), Path.t(), Path.t()) ::
           {String.t(), integer()}
-  def uv_cmd(uv, args, into, project_dir, python_install_dir, venv_dir) do
-    System.cmd(uv, ["--managed-python" | args],
+  def uv_cmd_sync(uv, args, into, project_dir, python_install_dir, venv_dir) do
+    System.cmd(uv, ~w[--managed-python sync --no-dev] ++ args,
       into: into,
       stderr_to_stdout: true,
       cd: project_dir,
