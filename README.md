@@ -25,7 +25,6 @@ Easy and efficient Python interop for Elixir.
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     pyproject_toml: """
     [project]
     name = "my-numpy-project"
@@ -75,7 +74,6 @@ be fetched & synced at compile time with [uv][uv], and put into your application
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     pyproject_toml: """
     [project]
     name = "my-numpy-project"
@@ -240,7 +238,6 @@ The existing `pyproject.toml` and `uv.lock` will be used to seed the Python envi
 ```elixir
 defmodule SnexTest.MyProject do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     project_path: "test/my_python_proj"
 end
 
@@ -251,7 +248,7 @@ end
 # Provide the project's path at runtime - you'll likely want to use
 # :code.priv_dir(:your_otp_app) and construct a path relative to that.
 iex> {:ok, inp} = SnexTest.MyProject.start_link(environment: %{
-...>   "PYTHONPATH" => "test/my_python_proj"
+...>   "PYTHONPATH" => Path.absname("test/my_python_proj")
 ...> })
 iex> {:ok, env} = Snex.make_env(inp)
 ...>

@@ -47,6 +47,7 @@ defmodule Snex.Interpreter do
   """
   @type option ::
           {:python, String.t()}
+          | {:cd, Path.t()}
           | {:environment, %{optional(String.t()) => String.t()}}
           | {:init_script, String.t()}
           | GenServer.option()
@@ -71,30 +72,39 @@ defmodule Snex.Interpreter do
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    {args, genserver_opts} = Keyword.split(opts, [:python, :environment, :init_script])
+    {args, genserver_opts} = Keyword.split(opts, [:python, :cd, :environment, :init_script])
     GenServer.start_link(__MODULE__, args, genserver_opts)
   end
 
   @impl GenServer
   def init(opts) do
     python = System.find_executable(opts[:python])
+    snex_pythonpath = Internal.Paths.snex_pythonpath()
+
+    pythonpath =
+      case get_in(opts[:environment]["PYTHONPATH"]) || System.get_env("PYTHONPATH") do
+        nil -> snex_pythonpath
+        pythonpath -> "#{snex_pythonpath}:#{pythonpath}"
+      end
 
     environment =
       opts
       |> Keyword.get(:environment, %{})
-      |> Map.put_new_lazy("PYTHONPATH", fn -> System.get_env("PYTHONPATH", "") end)
-      |> Map.update!("PYTHONPATH", &"#{:code.priv_dir(:snex)}:#{&1}")
+      |> Map.put("PYTHONPATH", pythonpath)
       |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
     port =
-      Port.open({:spawn_executable, python}, [
-        :binary,
-        :exit_status,
-        :nouse_stdio,
-        packet: 4,
-        env: environment,
-        args: ["-m", "snex"]
-      ])
+      Port.open(
+        {:spawn_executable, python},
+        [
+          :binary,
+          :exit_status,
+          :nouse_stdio,
+          packet: 4,
+          env: environment,
+          args: ["-m", "snex"]
+        ] ++ Keyword.take(opts, [:cd])
+      )
 
     id = run_command(%Commands.Init{code: opts[:init_script]}, port)
 
