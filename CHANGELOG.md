@@ -38,6 +38,12 @@
 
 - **Fix `returning: [val]` not returning a list**
 
+- **Make sure Snex artifacts are relocatable**
+
+  - Modify created venvs to be path-agnostic.
+  - Provide a `&Snex.Release.after_assemble/1` step for Mix release configuration.
+  - Drop the `:otp_app` configuration option with `use Snex.Interpreter`.
+
 ### Changes
 
 - **Split Python script into multiple files**

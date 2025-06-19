@@ -25,7 +25,6 @@ Easy and efficient Python interop for Elixir.
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     pyproject_toml: """
     [project]
     name = "my-numpy-project"
@@ -75,7 +74,6 @@ be fetched & synced at compile time with [uv][uv], and put into your application
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     pyproject_toml: """
     [project]
     name = "my-numpy-project"
@@ -288,14 +286,13 @@ The existing `pyproject.toml` and `uv.lock` will be used to seed the Python envi
 ```elixir
 defmodule SnexTest.MyProject do
   use Snex.Interpreter,
-    otp_app: :my_app_name,
     project_path: "test/my_python_proj"
 
   # Overrides `start_link/1` from `use Snex.Interpreter`
   def start_link(opts) do
     # Provide the project's path at runtime - you'll likely want to use
     # :code.priv_dir(:your_otp_app) and construct a path relative to that.
-    my_project_path = "test/my_python_proj"
+    my_project_path = Path.absname("test/my_python_proj")
 
     opts
     |> Keyword.put(:environment, %{"PYTHONPATH" => my_project_path})
@@ -333,6 +330,27 @@ iex> Snex.pyeval(env, """
 ...>   """, %{"self" => Snex.Serde.term(self())})
 iex> receive do val -> val end
 "hello from snex!"
+```
+
+## Releases
+
+Snex puts its managed files under `_build/$MIX_ENV/snex`.
+This works out of the box with `iex -S mix` and other local ways of running your code, but requires an additional step to copy files around to prepare your releases.
+
+Fortunately, accommodating releases is easy: just add `&Snex.Release.after_assemble/1` to `:steps` of your Mix release config.
+The only requirement is that it's placed after `:assemble` (and before `:tar`, if you use it.)
+
+```elixir
+# mix.exs
+def project do
+  [
+    releases: [
+      demo: [
+        steps: [:assemble, &Snex.Release.after_assemble/1]
+      ]
+    ]
+  ]
+end
 ```
 
 [uv]: https://github.com/astral-sh/uv

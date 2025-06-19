@@ -1,85 +1,56 @@
 defmodule Snex.Internal.CustomInterpreter do
   @moduledoc false
 
+  alias Snex.Internal
+
   @type option ::
-          {:pyproject_toml, String.t() | nil}
-          | {:project_path, String.t() | nil}
-          | {:otp_app, atom()}
+          {:pyproject_toml, Path.t() | nil}
+          | {:project_path, Path.t() | nil}
           | {:uv, String.t()}
 
   @spec using(module(), [option()]) :: Macro.t()
   def using(caller_module, opts) do
-    args =
-      opts
-      |> Keyword.validate!(
-        pyproject_toml: nil,
-        project_path: nil,
-        otp_app: Application.get_application(caller_module),
-        uv: "uv"
-      )
-      |> Map.new()
-      |> Map.update!(:uv, &System.find_executable/1)
+    args = validate_opts(opts)
 
-    if is_nil(args.otp_app) do
-      raise ArgumentError, """
-      `otp_app` not given to `use Snex.Interpreter`, and cannot be inferred \
-      from caller module #{inspect(caller_module)}.\
-      """
-    end
-
-    if is_nil(args.uv) do
-      raise ArgumentError, """
-      `uv` not found in PATH. Make sure that `uv` is installed and available \
-      in PATH, or set the `uv` option in `use Snex.Interpreter`.\
-      """
-    end
-
-    if is_nil(args.pyproject_toml) == is_nil(args.project_path) do
-      raise ArgumentError, "Exactly one of `pyproject_toml` and `project_path` must be given."
-    end
-
-    %{project_dir: project_dir} = dirs(args.otp_app, caller_module)
-    File.mkdir_p!(project_dir)
+    dirs = Internal.Paths.runtime_dirs(caller_module)
+    File.mkdir_p!(dirs.project_dir)
 
     external_resources_quote =
       if args.pyproject_toml,
-        do: copy_inline_project_files(project_dir, args.pyproject_toml),
-        else: copy_external_project_files(project_dir, project_path: args.project_path)
+        do: copy_inline_project_files(dirs.project_dir, args.pyproject_toml),
+        else: copy_external_project_files(dirs.project_dir, project_path: args.project_path)
 
-    uv_sync(caller_module, args)
+    sync_venv!(args.uv, caller_module, dirs)
 
     quote do
       unquote(external_resources_quote)
 
+      Module.register_attribute(__MODULE__, :snex, persist: true)
+      Module.put_attribute(__MODULE__, :snex, true)
+
       def __mix_recompile__? do
-        %{project_dir: project_dir, python_install_dir: python_install_dir, venv_dir: venv_dir} =
-          unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
-
-        {_out, retcode} =
-          unquote(__MODULE__).uv_cmd_sync(
-            unquote(args.uv),
-            ["--check"],
-            "",
-            project_dir,
-            python_install_dir,
-            venv_dir
-          )
-
-        retcode != 0
+        dirs = unquote(Internal.Paths).runtime_dirs(__MODULE__)
+        {_, ret} = unquote(__MODULE__).uv_cmd(unquote(args.uv), ~w[sync --check --no-dev], dirs)
+        ret != 0
+      rescue
+        _ -> true
       end
 
       def start_link(opts \\ []) do
-        %{venv_dir: venv_dir, venv_bin_dir: venv_bin_dir} =
-          unquote(__MODULE__).dirs(unquote(args.otp_app), __MODULE__)
+        dirs = unquote(Internal.Paths).runtime_dirs(__MODULE__)
 
-        default_env = %{
-          "VIRTUAL_ENV" => venv_dir,
-          "PATH" => "#{venv_bin_dir}:#{System.get_env("PATH")}"
-        }
+        path =
+          case get_in(opts[:environment]["PATH"]) || System.get_env("PATH") do
+            nil -> dirs.venv_bin_dir
+            path -> "#{dirs.venv_bin_dir}:#{path}"
+          end
+
+        environment = %{"VIRTUAL_ENV" => dirs.venv_dir, "PATH" => path}
 
         opts
-        |> Keyword.put_new(:python, Path.join(venv_bin_dir, "python"))
-        |> Keyword.update(:environment, default_env, &Map.merge(default_env, &1))
+        |> Keyword.put_new(:python, Path.join(dirs.venv_bin_dir, "python"))
+        |> Keyword.put_new(:cd, dirs.project_dir)
+        |> Keyword.update(:environment, environment, &Map.merge(&1, environment))
         |> Snex.Interpreter.start_link()
       end
 
@@ -94,37 +65,102 @@ defmodule Snex.Internal.CustomInterpreter do
     end
   end
 
-  defp uv_sync(caller_module, args) do
-    %{project_dir: project_dir, python_install_dir: python_install_dir, venv_dir: venv_dir} =
-      dirs(args.otp_app, caller_module)
+  defp validate_opts(opts) do
+    args =
+      opts
+      |> Keyword.validate!(
+        pyproject_toml: nil,
+        project_path: nil,
+        uv: "uv"
+      )
+      |> Map.new()
+      |> Map.update!(:uv, &System.find_executable/1)
 
-    IO.puts("""
-    #{inspect(caller_module)}: Fetching Python and dependencies
-      project_dir: #{project_dir}
-      python_install_dir: #{python_install_dir}
-    """)
-
-    with {_, retcode} when retcode != 0 <-
-           uv_cmd_sync(args.uv, [], IO.stream(), project_dir, python_install_dir, venv_dir) do
-      File.rm_rf!(venv_dir)
-      raise "uv sync failed"
+    if is_nil(args.uv) do
+      raise ArgumentError, """
+      `uv` not found in PATH. Make sure that `uv` is installed and available \
+      in PATH, or set the `uv` option in `use Snex.Interpreter`.\
+      """
     end
 
+    if is_nil(args.pyproject_toml) == is_nil(args.project_path) do
+      raise ArgumentError, "Exactly one of `pyproject_toml` and `project_path` must be given."
+    end
+
+    args
+  end
+
+  defp sync_venv!(uv, caller_module, %Internal.Paths{} = dirs) do
+    IO.puts("""
+    #{inspect(caller_module)}: Fetching Python and dependencies
+      project_dir: #{Path.relative_to_cwd(dirs.project_dir)}
+      python_install_dir: #{Path.relative_to_cwd(dirs.python_install_dir)}
+    """)
+
+    if not File.dir?(dirs.venv_dir), do: make_venv!(uv, dirs)
+
+    uv_sync!(uv, dirs)
     IO.puts("")
+
+    :ok
+  rescue
+    e ->
+      File.rm_rf!(dirs.venv_dir)
+      reraise e, __STACKTRACE__
+  end
+
+  defp make_venv!(uv, dirs) do
+    {_, 0} = uv_cmd(uv, ~w[--managed-python venv --relocatable], dirs, stream?: true)
+    relativize_symlinks!(dirs)
+    relativize_pyvenv_home!(dirs)
+  end
+
+  defp relativize_symlinks!(dirs) do
+    for link_path <- Path.join(dirs.venv_dir, "**") |> Path.wildcard(match_dot: true),
+        File.lstat!(link_path).type == :symlink,
+        link_target = File.read_link!(link_path),
+        Path.type(link_target) == :absolute do
+      relative_link_target = Path.relative_to(link_target, Path.dirname(link_path), force: true)
+      File.rm!(link_path)
+      File.ln_s!(relative_link_target, link_path)
+    end
+  end
+
+  defp relativize_pyvenv_home!(dirs) do
+    pyvenv_cfg_path = Path.join(dirs.venv_dir, "pyvenv.cfg")
+
+    updated_pyvenv_cfg =
+      Regex.replace(
+        ~r/^\s*home\s*=\s*(.*\S)\s*$/m,
+        File.read!(pyvenv_cfg_path),
+        fn _, home ->
+          relative_home = String.trim(home) |> Path.relative_to(dirs.project_dir, force: true)
+          "home = #{relative_home}"
+        end,
+        global: false
+      )
+
+    File.write!(pyvenv_cfg_path, updated_pyvenv_cfg)
+
+    :ok
+  end
+
+  defp uv_sync!(uv, dirs) do
+    {_, 0} = uv_cmd(uv, ~w[sync --no-dev], dirs, stream?: true)
     :ok
   end
 
   @doc false
-  @spec uv_cmd_sync(String.t(), [String.t()], Collectable.t(), Path.t(), Path.t(), Path.t()) ::
+  @spec uv_cmd(String.t(), [String.t()], Internal.Paths.t(), Keyword.t()) ::
           {String.t(), integer()}
-  def uv_cmd_sync(uv, args, into, project_dir, python_install_dir, venv_dir) do
-    System.cmd(uv, ~w[--managed-python sync --no-dev] ++ args,
-      into: into,
+  def uv_cmd(uv, args, %Internal.Paths{} = dirs, opts \\ []) do
+    System.cmd(uv, args,
+      into: if(opts[:stream?], do: IO.stream(), else: ""),
       stderr_to_stdout: true,
-      cd: project_dir,
+      cd: dirs.project_dir,
       env: %{
-        "UV_PYTHON_INSTALL_DIR" => python_install_dir,
-        "UV_PROJECT_ENVIRONMENT" => venv_dir
+        "UV_PYTHON_INSTALL_DIR" => dirs.python_install_dir,
+        "UV_PROJECT_ENVIRONMENT" => dirs.venv_dir
       }
     )
   end
@@ -148,25 +184,6 @@ defmodule Snex.Internal.CustomInterpreter do
       @external_resource unquote(pyproject_toml_path)
       @external_resource unquote(uv_lock_path)
     end
-  end
-
-  # credo:disable-for-next-line Credo.Check.Readability.Specs
-  def dirs(otp_app, module) do
-    priv_dir = otp_app |> :code.priv_dir() |> List.to_string()
-    base_dir = Path.join(priv_dir, "snex")
-    python_install_dir = Path.join(base_dir, "python")
-    project_dir = Path.join(base_dir, inspect(module))
-    venv_dir = Path.join(project_dir, ".venv")
-    venv_bin_dir = Path.join(venv_dir, "bin")
-
-    %{
-      priv_dir: priv_dir,
-      base_dir: base_dir,
-      python_install_dir: python_install_dir,
-      project_dir: project_dir,
-      venv_dir: venv_dir,
-      venv_bin_dir: venv_bin_dir
-    }
   end
 
   defp cp(src_dir, dst_dir, filename) do

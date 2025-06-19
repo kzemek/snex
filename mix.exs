@@ -14,7 +14,8 @@ defmodule Snex.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      package: package()
+      package: package(),
+      dialyzer: dialyzer()
     ] ++ docs()
   end
 
@@ -63,6 +64,12 @@ defmodule Snex.MixProject do
         "py_src/uv.lock",
         "README.md"
       ]
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_add_apps: [:mix]
     ]
   end
 
