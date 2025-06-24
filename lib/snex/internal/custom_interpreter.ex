@@ -85,8 +85,8 @@ defmodule Snex.Internal.CustomInterpreter do
   defp sync_venv!(uv, caller_module, %Internal.Paths{} = dirs) do
     IO.puts("""
     #{inspect(caller_module)}: Fetching Python and dependencies
-      project_dir: #{dirs.project_dir}
-      python_install_dir: #{dirs.python_install_dir}
+      project_dir: #{Path.relative_to_cwd(dirs.project_dir)}
+      python_install_dir: #{Path.relative_to_cwd(dirs.python_install_dir)}
     """)
 
     if not File.dir?(dirs.venv_dir), do: make_venv!(uv, dirs)

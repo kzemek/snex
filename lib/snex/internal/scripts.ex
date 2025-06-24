@@ -7,7 +7,7 @@ defmodule Snex.Internal.Scripts do
 
   @script_in_path Path.join("py_src", "snex")
   @script_out_path Path.join(Internal.Paths.snex_pythonpath(), "snex")
-  for path <- Path.wildcard(Path.join(["py_src", "snex", "**"])) do
+  for path <- Path.join(@script_in_path, "**") |> Path.wildcard() do
     @external_resource path
   end
 
