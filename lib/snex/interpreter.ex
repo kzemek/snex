@@ -50,6 +50,7 @@ defmodule Snex.Interpreter do
           | {:cd, Path.t()}
           | {:environment, %{optional(String.t()) => String.t()}}
           | {:init_script, String.t()}
+          | {:sync_start?, boolean()}
           | GenServer.option()
 
   @doc """
@@ -68,54 +69,31 @@ defmodule Snex.Interpreter do
       Failing to run the script will cause the process initialization to fail. The variable
       context left by the script will be the initial context for all `Snex.make_env/3` calls
       using this interpreter.
+    * `:sync_start?` - If `true`, the interpreter will start and run the init script in the init
+      callback. Setting this to `false` is useful for long-running init scripts; the downside
+      is that if something goes wrong, the interpreter process will start crashing after
+      successfully starting as a part of the supervision tree. Default: `true`.
     * any other options will be passed to `GenServer.start_link/3`.
 
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    {args, genserver_opts} = Keyword.split(opts, [:python, :cd, :environment, :init_script])
+    {args, genserver_opts} =
+      Keyword.split(opts, [:python, :cd, :environment, :init_script, :sync_start?])
+
     GenServer.start_link(__MODULE__, args, genserver_opts)
   end
 
   @impl GenServer
   def init(opts) do
-    python = System.find_executable(opts[:python])
-    snex_pythonpath = Internal.Paths.snex_pythonpath()
-
-    pythonpath =
-      case opts[:environment]["PYTHONPATH"] || System.get_env("PYTHONPATH") do
-        nil -> snex_pythonpath
-        pythonpath -> "#{snex_pythonpath}:#{pythonpath}"
-      end
-
-    environment =
-      opts
-      |> Keyword.get(:environment, %{})
-      |> Map.put("PYTHONPATH", pythonpath)
-      |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
-
-    port =
-      Port.open(
-        {:spawn_executable, python},
-        [
-          :binary,
-          :exit_status,
-          :nouse_stdio,
-          packet: 4,
-          env: environment,
-          args: ["-m", "snex"]
-        ] ++ Keyword.take(opts, [:cd])
-      )
-
-    id = run_command(%Commands.Init{code: opts[:init_script]}, port)
-
-    receive do
-      {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response, port)
-    end
-
-    {:ok, %State{port: port}}
+    if Keyword.get(opts, :sync_start?, true),
+      do: {:ok, %State{port: init_python_port(opts)}},
+      else: {:ok, %State{}, {:continue, {:init, opts}}}
   end
+
+  @impl GenServer
+  def handle_continue({:init, opts}, _state),
+    do: {:noreply, %State{port: init_python_port(opts)}}
 
   @impl GenServer
   def handle_call(command, from, state) do
@@ -161,6 +139,45 @@ defmodule Snex.Interpreter do
   def handle_info(message, state) do
     Logger.warning("Received unexpected message: #{inspect(message)}")
     {:noreply, state}
+  end
+
+  defp init_python_port(opts) do
+    python = System.find_executable(opts[:python])
+    snex_pythonpath = Internal.Paths.snex_pythonpath()
+
+    pythonpath =
+      case opts[:environment]["PYTHONPATH"] || System.get_env("PYTHONPATH") do
+        nil -> snex_pythonpath
+        pythonpath -> "#{snex_pythonpath}:#{pythonpath}"
+      end
+
+    environment =
+      opts
+      |> Keyword.get(:environment, %{})
+      |> Map.put("PYTHONPATH", pythonpath)
+      |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
+
+    port =
+      Port.open(
+        {:spawn_executable, python},
+        [
+          :binary,
+          :exit_status,
+          :nouse_stdio,
+          packet: 4,
+          env: environment,
+          args: ["-m", "snex"]
+        ] ++ Keyword.take(opts, [:cd])
+      )
+
+    id = run_command(%Commands.Init{code: opts[:init_script]}, port)
+
+    receive do
+      {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
+        :ok = decode_reply(response, port)
+    end
+
+    port
   end
 
   defp run_command(command, port) do

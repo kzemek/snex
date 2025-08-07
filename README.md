@@ -186,6 +186,10 @@ iex> Snex.pyeval(env, returning: "int(np.array([my_var])[0])")
 {:ok, 42}
 ```
 
+If your init script takes significant time, you can pass `sync_start: false` to `start_link/1`.
+This will return early from the interpreter startup, and run the Python interpreter - and the init script - asynchronously.
+The downside is that an issue with Python or the initialization code will cause the process to crash asynchronously instead of returning an error directly from `start_link/1`.
+
 ### Serialization
 
 By default, data is JSON-serialized using [`JSON`](https://hexdocs.pm/elixir/JSON.html) on the Elixir side and [`json`](https://docs.python.org/3/library/json.html) on the Python side.

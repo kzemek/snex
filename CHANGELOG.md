@@ -32,6 +32,10 @@
 
 - **Drop down Python version requirement to `3.10`**
 
+- **Add `:sync_start?` option for `Snex.Interpreter` and its derivatives**
+
+  If `false` (default: `true`), Python initialization and custom init script will run asynchronously after starting the Snex interpreter process.
+
 ### Fixes
 
 - **Make sure `Snex.Interpreter` process stops when Python interpreter process dies**
