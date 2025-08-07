@@ -142,7 +142,7 @@ defmodule Snex.Interpreter do
   end
 
   defp init_python_port(opts) do
-    python = System.find_executable(opts[:python])
+    python = System.find_executable(opts[:python] || "python")
     snex_pythonpath = Internal.Paths.snex_pythonpath()
 
     pythonpath =

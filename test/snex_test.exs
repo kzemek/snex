@@ -1,9 +1,11 @@
 defmodule SnexTest do
   use ExUnit.Case, async: true
+  use MarkdownDoctest
 
   import ExUnit.CaptureLog
 
-  doctest_file("README.md")
+  markdown_doctest "README.md",
+    except: &String.contains?(&1, ["defmodule", "def deps", "def project"])
 
   setup do
     inp = start_link_supervised!(SnexTest.NumpyInterpreter)
