@@ -33,15 +33,17 @@ defmodule SnexTest.NumpyInterpreter do
     dependencies = ["numpy>=2"]
     """
 end
+```
 
-iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, env} = Snex.make_env(inp)
-...>
-iex> Snex.pyeval(env, """
-...>   import numpy as np
-...>   matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (s, s), dtype=int)
-...>   """, %{"s" => 6}, returning: "np.linalg.norm(matrix)")
-{:ok, 6.0}
+```elixir
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:ok, 6.0} =
+  Snex.pyeval(env, """
+    import numpy as np
+    matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (s, s), dtype=int)
+    """, %{"s" => 6}, returning: "np.linalg.norm(matrix)")
 ```
 
 ## Installation & Requirements
@@ -93,25 +95,25 @@ The main way of interacting with the interpreter process is `Snex.pyeval/4` (and
 This is the function that runs Python code, returns data from the interpreter, and more.
 
 ```elixir
-iex> {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, %Snex.Env{} = env} = Snex.make_env(interpreter)
-...>
-iex> Snex.pyeval(env, """
-...>   import numpy as np
-...>   matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (6, 6), dtype=int)
-...>   scalar = np.linalg.norm(matrix)
-...>   """, returning: "scalar")
-{:ok, 6.0}
+{:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
+{:ok, %Snex.Env{} = env} = Snex.make_env(interpreter)
+
+{:ok, 6.0} =
+  Snex.pyeval(env, """
+    import numpy as np
+    matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (6, 6), dtype=int)
+    scalar = np.linalg.norm(matrix)
+    """, returning: "scalar")
 ```
 
 The `:returning` option can take any valid Python expression, or an Elixir list of them:
 
 ```elixir
-iex> {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, env} = Snex.make_env(interpreter)
-...>
-iex> Snex.pyeval(env, "x = 3", returning: ["x", "x*2", "x**2"])
-{:ok, [3, 6, 9]}
+{:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
+{:ok, env} = Snex.make_env(interpreter)
+
+{:ok, [3, 6, 9]} =
+  Snex.pyeval(env, "x = 3", returning: ["x", "x*2", "x**2"])
 ```
 
 ### Environments
@@ -130,19 +132,18 @@ In Python parlance, they are **global & local symbol table** your Python code is
 Reusing a single environment, you can use variables defined in the previous `Snex.pyeval/4` calls:
 
 ```elixir
-iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, env} = Snex.make_env(inp)
-...>
-...> # `pyeval` does not return a value if not given a `returning` opt
-iex> :ok = Snex.pyeval(env, "x = 10")
-...>
-...> # additional data can be provided for `pyeval` to put in the environment
-...> # before running the code
-iex> :ok = Snex.pyeval(env, "y = x * z", %{"z" => 2})
-...>
-...> # `pyeval` can also be called with `:returning` opt alone
-iex> Snex.pyeval(env, returning: ["x", "y", "z"])
-{:ok, [10, 20, 2]}
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+# `pyeval` does not return a value if not given a `returning` opt
+:ok = Snex.pyeval(env, "x = 10")
+
+# additional data can be provided for `pyeval` to put in the environment
+# before running the code
+:ok = Snex.pyeval(env, "y = x * z", %{"z" => 2})
+
+# `pyeval` can also be called with `:returning` opt alone
+{:ok, [10, 20, 2]} = Snex.pyeval(env, returning: ["x", "y", "z"])
 ```
 
 Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environment:
@@ -174,11 +175,11 @@ User data sent between Python and Elixir is subject to "standard" JSON serializa
 Among other things, this means that Python tuples will be serialized as arrays, while Elixir atoms and binaries will be serialized as strings.
 
 ```elixir
-iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, env} = Snex.make_env(inp)
-...>
-iex> Snex.pyeval(env, "x = ('hello', y)", %{"y" => :world}, returning: "x")
-{:ok, ["hello", "world"]}
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:ok, ["hello", "world"]} =
+  Snex.pyeval(env, "x = ('hello', y)", %{"y" => :world}, returning: "x")
 ```
 
 ### Run async code
@@ -187,18 +188,18 @@ Code ran by Snex lives in an [`asyncio`](https://docs.python.org/3/library/async
 You can include async functions in your snippets and await them on the top level:
 
 ```elixir
-iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, env} = Snex.make_env(inp)
-...>
-iex> Snex.pyeval(env, """
-...>   import asyncio
-...>   async def do_thing():
-...>       await asyncio.sleep(0.01)
-...>       return "hello"
-...>
-...>   result = await do_thing()
-...>   """, returning: ["result"])
-{:ok, "hello"}
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:ok, "hello"} =
+  Snex.pyeval(env, """
+    import asyncio
+    async def do_thing():
+        await asyncio.sleep(0.01)
+        return "hello"
+
+    result = await do_thing()
+    """, returning: ["result"])
 ```
 
 ### Run blocking code
@@ -206,27 +207,28 @@ iex> Snex.pyeval(env, """
 A good way to run any blocking code is to prepare and use your own thread or process pools:
 
 ```elixir
-iex> {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-iex> {:ok, pool_env} = Snex.make_env(inp)
-...>
-iex> :ok = Snex.pyeval(pool_env, """
-...>   import asyncio
-...>   from concurrent.futures import ThreadPoolExecutor
-...>
-...>   pool = ThreadPoolExecutor(max_workers=cnt)
-...>   loop = asyncio.get_running_loop()
-...>   """, %{"cnt" => 5})
-...>
-...> # You can keep the pool environment around and copy it into new ones
-iex> {:ok, env} = Snex.make_env(inp, from: {pool_env, only: ["pool", "loop"]})
-...>
-iex> {:ok, "world!"} = Snex.pyeval(env, """
-...>   def blocking_io():
-...>       return "world!"
-...>
-...>   res = await loop.run_in_executor(pool, blocking_io)
-...>   """, returning: "res")
-{:ok, "world!"}
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, pool_env} = Snex.make_env(inp)
+
+:ok =
+  Snex.pyeval(pool_env, """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=cnt)
+    loop = asyncio.get_running_loop()
+    """, %{"cnt" => 5})
+
+# You can keep the pool environment around and copy it into new ones
+{:ok, env} = Snex.make_env(inp, from: {pool_env, only: ["pool", "loop"]})
+
+{:ok, "world!"} =
+  Snex.pyeval(env, """
+    def blocking_io():
+        return "world!"
+
+    res = await loop.run_in_executor(pool, blocking_io)
+    """, returning: "res")
 ```
 
 ### Use your in-repo project
@@ -240,20 +242,21 @@ defmodule SnexTest.MyProject do
   use Snex.Interpreter,
     project_path: "test/my_python_proj"
 end
+```
 
+```elixir
 # $ cat test/my_python_proj/foo.py
 # def bar():
 #     return "hi from bar"
 
 # Provide the project's path at runtime - you'll likely want to use
 # :code.priv_dir(:your_otp_app) and construct a path relative to that.
-iex> {:ok, inp} = SnexTest.MyProject.start_link(environment: %{
-...>   "PYTHONPATH" => Path.absname("test/my_python_proj")
-...> })
-iex> {:ok, env} = Snex.make_env(inp)
-...>
-iex> Snex.pyeval(env, "import foo", returning: "foo.bar()")
-{:ok, "hi from bar"}
+{:ok, inp} = SnexTest.MyProject.start_link(environment: %{
+  "PYTHONPATH" => Path.absname("test/my_python_proj")
+})
+{:ok, env} = Snex.make_env(inp)
+
+{:ok, "hi from bar"} = Snex.pyeval(env, "import foo", returning: "foo.bar()")
 ```
 
 [uv]: https://github.com/astral-sh/uv
