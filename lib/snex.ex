@@ -226,7 +226,7 @@ defmodule Snex do
 
     returning =
       with ret when is_list(ret) <- opts[:returning],
-           do: Enum.join(ret, ", ")
+           do: "[#{Enum.join(ret, ", ")}]"
 
     GenServer.call(
       env.interpreter,

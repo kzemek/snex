@@ -52,6 +52,12 @@ defmodule SnexTest do
     end
   end
 
+  describe "returning" do
+    test "return an Elixir list of a single value", %{env: env} do
+      assert {:ok, [42]} = Snex.pyeval(env, returning: ["42"])
+    end
+  end
+
   describe "error handling" do
     test "unserializable value in make_eval", %{inp: inp} do
       assert {:error, %Protocol.UndefinedError{}} = Snex.make_env(inp, %{"x" => make_ref()})

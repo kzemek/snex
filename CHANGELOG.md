@@ -31,6 +31,8 @@
 
 - **Make sure `Snex.Interpreter` process stops when Python interpreter process dies**
 
+- **Fix `returning: [val]` not returning a list**
+
 ### Changes
 
 - **Split Python script into multiple files**

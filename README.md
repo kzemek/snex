@@ -248,7 +248,7 @@ iex> Snex.pyeval(env, """
 ...>
 ...>   result = await do_thing()
 ...>   """, returning: ["result"])
-{:ok, "hello"}
+{:ok, ["hello"]}
 ```
 
 ### Run blocking code
