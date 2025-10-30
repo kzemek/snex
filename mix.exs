@@ -43,7 +43,7 @@ defmodule Snex.MixProject do
       homepage_url: "https://github.com/kzemek/snex",
       docs: [
         main: "Snex",
-        extras: ["LICENSE", "NOTICE"]
+        extras: ["CHANGELOG.md", "LICENSE", "NOTICE"]
       ]
     ]
   end
@@ -55,6 +55,7 @@ defmodule Snex.MixProject do
       files: [
         ".formatter.exs",
         "c_src/*.[ch]",
+        "CHANGELOG.md",
         "lib",
         "LICENSE",
         "Makefile",
