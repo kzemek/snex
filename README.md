@@ -59,7 +59,7 @@ end
 ```elixir
 def deps do
   [
-    {:snex, "~> 0.1.0"}
+    {:snex, "~> 0.2.0"}
   ]
 end
 ```
