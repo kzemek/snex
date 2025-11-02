@@ -9,16 +9,16 @@ Easy and efficient Python interop for Elixir.
 
 ## Highlights
 
-- 🛡️ **Robust & Isolated:**
+- **Robust & Isolated:**
   Run multiple Python interpreters in separate OS processes, preventing GIL issues from affecting your Elixir application.
-- 📦 **Declarative Environments:**
+- **Declarative Environments:**
   Leverages [`uv`][uv] to manage Python versions and dependencies, embedding them into your application's release for consistent deployments.
-- ✨ **Ergonomic Interface:**
+- **Ergonomic Interface:**
   A powerful and efficient interface with explicit control over data passing between Elixir and Python processes.
-- 🤸 **Flexible:**
+- **Flexible:**
   Supports custom Python environments, `asyncio` code, and integration with external Python projects.
-- ⏩ **Forward Compatibility:**
-  Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use — they should work day one!
+- **Forward Compatibility:**
+  Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
 
 ## Quick example
 
@@ -54,7 +54,7 @@ end
   It has to be available at compilation time but isn't needed at runtime.
 - Python `>= 3.10` -
   this is the minimum supported version you can run your scripts with.
-  You don't need to have it installed — Snex will fetch it with `uv`.
+  You don't need to have it installed - Snex will fetch it with `uv`.
 
 ```elixir
 def deps do
@@ -70,7 +70,7 @@ end
 
 You can define your Python project settings using `use Snex.Interpreter` in your module.
 
-Set a required Python version and any dependencies —both the Python binary & the dependencies will
+Set a required Python version and any dependencies - both the Python binary & the dependencies will
 be fetched & synced at compile time with [uv][uv], and put into your application's priv directory.
 
 ```elixir
