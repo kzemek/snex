@@ -70,8 +70,7 @@ end
 
 You can define your Python project settings using `use Snex.Interpreter` in your module.
 
-Set a required Python version and any dependencies - both the Python binary & the dependencies will
-be fetched & synced at compile time with [uv][uv], and put into your application's priv directory.
+Set a required Python version and any dependencies - both the Python binary and the dependencies will be fetched & synced at compile time with [uv][uv], and put into `_build/$MIX_ENV/snex` directory.
 
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
