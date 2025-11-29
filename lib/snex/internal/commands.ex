@@ -2,13 +2,14 @@ defmodule Snex.Internal.Commands.Init do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          command: String.t(),
+          command: :init,
+          start_ts: {:wall | :os_monotonic, non_neg_integer()},
           code: String.t() | nil
         }
 
-  @enforce_keys [:code]
-  @derive JSON.Encoder
-  defstruct [:code, command: "init"]
+  @enforce_keys [:start_ts, :code]
+  @derive {JSON.Encoder, except: [:start_ts]}
+  defstruct [:start_ts, :code, command: :init]
 end
 
 defmodule Snex.Internal.Commands.MakeEnv do
@@ -29,28 +30,30 @@ defmodule Snex.Internal.Commands.MakeEnv do
   end
 
   @type t :: %__MODULE__{
-          command: String.t(),
+          command: :make_env,
+          start_ts: {:wall | :os_monotonic, non_neg_integer()},
           from_env: [FromEnv.t()],
           additional_vars: %{String.t() => term()}
         }
 
-  @enforce_keys []
-  @derive JSON.Encoder
-  defstruct from_env: [], additional_vars: %{}, command: "make_env"
+  @enforce_keys [:start_ts]
+  @derive {JSON.Encoder, except: [:start_ts]}
+  defstruct [:start_ts, from_env: [], additional_vars: %{}, command: :make_env]
 end
 
 defmodule Snex.Internal.Commands.Eval do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          command: String.t(),
+          command: :eval,
+          start_ts: {:wall | :os_monotonic, non_neg_integer()},
           code: String.t() | nil,
           env: Snex.Env.t(),
           returning: String.t() | nil,
           additional_vars: %{String.t() => term()}
         }
 
-  @enforce_keys [:code, :env]
-  @derive JSON.Encoder
-  defstruct [:code, :env, returning: nil, additional_vars: %{}, command: "eval"]
+  @enforce_keys [:start_ts, :code, :env]
+  @derive {JSON.Encoder, except: [:start_ts]}
+  defstruct [:start_ts, :code, :env, returning: nil, additional_vars: %{}, command: :eval]
 end

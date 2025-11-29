@@ -6,6 +6,7 @@ defmodule Snex do
              |> String.replace("> [!IMPORTANT]", "> #### Important {: .info}")
 
   alias Snex.Internal.Commands
+  alias Snex.Internal.Telemetry.CommandSpan
 
   @typedoc """
   An "environment" is an Elixir-side reference to Python-side variable context in which your Python
@@ -130,7 +131,11 @@ defmodule Snex do
 
     GenServer.call(
       interpreter,
-      %Commands.MakeEnv{from_env: from, additional_vars: additional_vars},
+      %Commands.MakeEnv{
+        start_ts: CommandSpan.start_ts(interpreter),
+        from_env: from,
+        additional_vars: additional_vars
+      },
       :infinity
     )
   end
@@ -231,6 +236,7 @@ defmodule Snex do
     GenServer.call(
       env.interpreter,
       %Commands.Eval{
+        start_ts: CommandSpan.start_ts(env.interpreter),
         code: code,
         env: env,
         additional_vars: additional_vars,

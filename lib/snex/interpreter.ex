@@ -25,6 +25,7 @@ defmodule Snex.Interpreter do
 
   alias Snex.Internal
   alias Snex.Internal.Commands
+  alias Snex.Internal.Telemetry.CommandSpan
 
   require Logger
 
@@ -41,11 +42,14 @@ defmodule Snex.Interpreter do
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, pending: %{}]
+  defstruct [:port, :label, pending: %{}]
 
   @typep state :: %State{
-           port: port(),
-           pending: %{optional(request_id()) => %{client: GenServer.from()}}
+           port: :erlang.port(),
+           label: term(),
+           pending: %{
+             optional(request_id()) => %{client: GenServer.from(), span: CommandSpan.t()}
+           }
          }
 
   defmacro __using__(opts),
@@ -105,14 +109,14 @@ defmodule Snex.Interpreter do
   @spec init([option()]) ::
           {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
-    {label, opts} = Keyword.pop(opts, :label)
+    label = opts[:label]
 
     if label != nil and function_exported?(:proc_lib, :set_label, 1),
       do: :proc_lib.set_label(label)
 
     if Keyword.get(opts, :sync_start?, true),
-      do: {:ok, %State{port: init_python_port(opts)}},
-      else: {:ok, %State{}, {:continue, {:init, opts}}}
+      do: {:ok, %State{label: label, port: init_python_port(opts)}},
+      else: {:ok, %State{label: label}, {:continue, {:init, opts}}}
   end
 
   @impl GenServer
@@ -125,8 +129,8 @@ defmodule Snex.Interpreter do
   @spec handle_call(command(), GenServer.from(), state()) ::
           {:noreply, state()} | {:reply, {:error, any()}, state()}
   def handle_call(command, from, %State{} = state) do
-    id = run_command(command, state.port)
-    pending = Map.put(state.pending, id, %{client: from})
+    {id, span} = run_command(command, state.port, state.label)
+    pending = Map.put(state.pending, id, %{client: from, span: span})
     {:noreply, %State{state | pending: pending}}
   rescue
     e -> {:reply, {:error, e}, state}
@@ -142,8 +146,8 @@ defmodule Snex.Interpreter do
     {pending_entry, pending} = Map.pop(state.pending, id)
 
     case pending_entry do
-      %{client: client} ->
-        result = decode_reply(data, port)
+      %{client: client, span: span} ->
+        result = handle_command_response(data, port, span)
         GenServer.reply(client, result)
 
       nil ->
@@ -203,27 +207,64 @@ defmodule Snex.Interpreter do
         ] ++ Keyword.take(opts, [:cd])
       )
 
-    id = run_command(%Commands.Init{code: opts[:init_script]}, port)
-
-    receive do
-      {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response, port)
-    end
+    run_init_script(port, opts)
 
     port
   end
 
-  defp run_command(command, port) do
+  defp run_init_script(port, opts) do
+    command = %Commands.Init{
+      start_ts: CommandSpan.start_ts(self()),
+      code: opts[:init_script]
+    }
+
+    {id, span} = run_command(command, port, opts[:label])
+
+    receive do
+      {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
+        :ok = handle_command_response(response, port, span)
+    end
+
+    :ok
+  end
+
+  defp run_command(command, port, interpreter_label) do
+    span =
+      %CommandSpan{}
+      |> CommandSpan.meta(:command_name, command.command)
+      |> CommandSpan.meta(:interpreter_label, interpreter_label)
+      |> CommandSpan.timestamp_now(:request_elixir_received)
+      |> CommandSpan.timestamp(:start, command.start_ts)
+
     id = :rand.bytes(16)
     data = Snex.Serde.encode_to_iodata!(command)
     Port.command(port, [id, @request, data])
-    id
+
+    span =
+      span
+      |> CommandSpan.meta(:telemetry_span_context, id)
+      |> CommandSpan.timestamp_now(:request_sent_to_python)
+      |> CommandSpan.emit_start()
+
+    {id, span}
+  end
+
+  defp handle_command_response(data, port, span) do
+    span = CommandSpan.timestamp_now(span, :response_received)
+
+    {result, python_timestamps} = decode_reply(data, port)
+
+    span
+    |> CommandSpan.timestamp_now(:stop)
+    |> CommandSpan.emit_stop(python_timestamps || %{})
+
+    result
   end
 
   defp decode_reply(data, port) do
     case Snex.Serde.decode(data) do
       {:ok, reply} ->
-        reply_to_result(reply, port)
+        {reply_to_result(reply, port), reply["timestamps"]}
 
       {:error, reason} ->
         error =
@@ -232,7 +273,7 @@ defmodule Snex.Interpreter do
             reason: {:result_decode_error, reason, data}
           )
 
-        {:error, error}
+        {{:error, error}, nil}
     end
   end
 
