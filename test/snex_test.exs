@@ -2,8 +2,6 @@ defmodule SnexTest do
   use ExUnit.Case, async: true
   use MarkdownDoctest
 
-  import ExUnit.CaptureLog
-
   markdown_doctest "README.md",
     except: &String.contains?(&1, ["defmodule", "def deps", "def project"])
 
@@ -124,25 +122,48 @@ defmodule SnexTest do
               }} = Snex.pyeval(env, "import datetime", returning: "datetime")
     end
 
-    test "the interpreter exits on Python fatal error" do
-      {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
-      Process.unlink(inp)
+    @tag capture_log: true
+    test "the interpreter exits on Python fatal error", %{inp: inp} do
+      Process.flag(:trap_exit, true)
 
-      monitor_ref = Process.monitor(inp)
       %{port: port} = :sys.get_state(inp)
       {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
 
-      log =
-        capture_log(
-          [level: :error],
-          fn ->
-            assert {_, 0} = System.cmd("kill", ~w[-SIGTERM #{os_pid}])
-            assert_receive {:DOWN, ^monitor_ref, :process, ^inp, {:exit_status, 143}}
-          end
-        )
+      assert {_, 0} = System.cmd("kill", ~w[-SIGTERM #{os_pid}])
+      assert_receive {:EXIT, ^inp, {:exit_status, 143}}
+    end
+  end
 
-      assert log =~ "GenServer #{inspect(inp)} terminating"
-      assert log =~ "(stop) {:exit_status, 143}"
+  describe "sync_start_timeout" do
+    test "returns an error if sync_start? is true" do
+      Process.flag(:trap_exit, true)
+
+      assert {:error, %Snex.Error{code: :init_script_timeout}} =
+               Snex.Interpreter.start_link(
+                 sync_start?: true,
+                 init_script_timeout: 0,
+                 init_script: """
+                 import time
+                 time.sleep(1)
+                 """
+               )
+    end
+
+    @tag capture_log: true
+    test "exits asynchronously if sync_start? is false" do
+      Process.flag(:trap_exit, true)
+
+      assert {:ok, inp} =
+               Snex.Interpreter.start_link(
+                 sync_start?: false,
+                 init_script_timeout: 0,
+                 init_script: """
+                 import time
+                 time.sleep(1)
+                 """
+               )
+
+      assert_receive {:EXIT, ^inp, %Snex.Error{code: :init_script_timeout}}
     end
   end
 end

@@ -30,6 +30,7 @@ defmodule Snex.Interpreter do
 
   @request 0
   @response 1
+  @default_init_script_timeout to_timeout(minute: 1)
 
   @typedoc """
   Running instance of `Snex.Interpreter`.
@@ -59,6 +60,7 @@ defmodule Snex.Interpreter do
           | {:cd, Path.t()}
           | {:environment, %{optional(String.t()) => String.t()}}
           | {:init_script, String.t()}
+          | {:init_script_timeout, timeout()}
           | {:sync_start?, boolean()}
           | {:label, term()}
           | GenServer.option()
@@ -82,6 +84,9 @@ defmodule Snex.Interpreter do
       left by the script will be the initial context for all `Snex.make_env/3` calls using this
       interpreter.
 
+    - `:init_script_timeout` - The timeout for the init script. Can be a number of milliseconds
+      or `:infinity`. Default: #{@default_init_script_timeout}.
+
     - `:sync_start?` - If `true`, the interpreter will start and run the init script in the init
       callback. Setting this to `false` is useful for long-running init scripts; the downside
       is that if something goes wrong, the interpreter process will start crashing after
@@ -96,7 +101,15 @@ defmodule Snex.Interpreter do
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
     {args, genserver_opts} =
-      Keyword.split(opts, [:python, :cd, :environment, :init_script, :sync_start?, :label])
+      Keyword.split(opts, [
+        :python,
+        :cd,
+        :environment,
+        :init_script,
+        :init_script_timeout,
+        :sync_start?,
+        :label
+      ])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
   end
@@ -110,16 +123,24 @@ defmodule Snex.Interpreter do
     if label != nil and function_exported?(:proc_lib, :set_label, 1),
       do: :proc_lib.set_label(label)
 
-    if Keyword.get(opts, :sync_start?, true),
-      do: {:ok, %State{port: init_python_port(opts)}},
-      else: {:ok, %State{}, {:continue, {:init, opts}}}
+    with true <- !!Keyword.get(opts, :sync_start?, true),
+         {:ok, port} <- init_python_port(opts) do
+      {:ok, %State{port: port}}
+    else
+      false -> {:ok, %State{}, {:continue, {:init, opts}}}
+      {:error, reason} -> {:stop, reason}
+    end
   end
 
   @impl GenServer
   @spec handle_continue({:init, [option()]}, state()) ::
           {:noreply, state()}
-  def handle_continue({:init, opts}, %State{} = state),
-    do: {:noreply, %State{state | port: init_python_port(opts)}}
+  def handle_continue({:init, opts}, %State{} = state) do
+    case init_python_port(opts) do
+      {:ok, port} -> {:noreply, %State{state | port: port}}
+      {:error, reason} -> {:stop, reason, state}
+    end
+  end
 
   @impl GenServer
   @spec handle_call(command(), GenServer.from(), state()) ::
@@ -203,14 +224,22 @@ defmodule Snex.Interpreter do
         ] ++ Keyword.take(opts, [:cd])
       )
 
+    with :ok <- run_init_script(port, opts),
+         do: {:ok, port}
+  end
+
+  defp run_init_script(port, opts) do
     id = run_command(%Commands.Init{code: opts[:init_script]}, port)
+
+    init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
 
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
         :ok = decode_reply(response, port)
+    after
+      init_script_timeout ->
+        {:error, Snex.Error.exception(code: :init_script_timeout)}
     end
-
-    port
   end
 
   defp run_command(command, port) do

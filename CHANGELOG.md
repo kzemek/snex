@@ -8,6 +8,11 @@
   Most usefully, the label is automatically set to `__MODULE__` when calling `use Snex.Interpreter`.
   This way, `Snex.Interpreter` processes become easily traceable to the custom interpreter that spawned them.
 
+- **Add `:init_script_timeout` option to `Snex.Interpreter`**
+
+  The timeout waits for the init script to finish, otherwise errors with `%Snex.Error{code: :init_script_timeout}`.
+  It's set to 60 seconds by default.
+
 ## 0.2.0
 
 ### Features

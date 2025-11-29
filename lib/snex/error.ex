@@ -15,16 +15,21 @@ defmodule Snex.Error do
   """
   @type env_not_found :: :env_not_found
 
-  @typedoc """
-  The error code indicating a key is not found in the `t:Snex.env/0`.
-  """
+  @typedoc "The error code indicating a key is not found in the `t:Snex.env/0`."
   @type env_key_not_found :: :env_key_not_found
+
+  @typedoc "The error code indicating the init script timed out."
+  @type init_script_timeout :: :init_script_timeout
 
   @typedoc """
   Error codes for all errors.
   """
   @type error_code ::
-          python_runtime_error() | internal_error() | env_not_found() | env_key_not_found()
+          python_runtime_error()
+          | internal_error()
+          | env_not_found()
+          | env_key_not_found()
+          | init_script_timeout()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.
