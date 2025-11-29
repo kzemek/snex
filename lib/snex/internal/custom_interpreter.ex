@@ -50,6 +50,7 @@ defmodule Snex.Internal.CustomInterpreter do
         opts
         |> Keyword.put_new(:python, Path.join(dirs.venv_bin_dir, "python"))
         |> Keyword.put_new(:cd, dirs.project_dir)
+        |> Keyword.put_new(:label, __MODULE__)
         |> Keyword.update(:environment, environment, &Map.merge(&1, environment))
         |> Snex.Interpreter.start_link()
       end

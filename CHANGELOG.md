@@ -1,3 +1,13 @@
+## 0.2.1 (Unreleased)
+
+### Features
+
+- **Add `:label` option to `Snex.Interpreter`**
+
+  The option labels the interpreter process through `:proc_lib.set_label/1`.
+  Most usefully, the label is automatically set to `__MODULE__` when calling `use Snex.Interpreter`.
+  This way, `Snex.Interpreter` processes become easily traceable to the custom interpreter that spawned them.
+
 ## 0.2.0
 
 ### Features

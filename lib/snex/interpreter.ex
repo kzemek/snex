@@ -60,6 +60,7 @@ defmodule Snex.Interpreter do
           | {:environment, %{optional(String.t()) => String.t()}}
           | {:init_script, String.t()}
           | {:sync_start?, boolean()}
+          | {:label, term()}
           | GenServer.option()
 
   @doc """
@@ -86,12 +87,16 @@ defmodule Snex.Interpreter do
       is that if something goes wrong, the interpreter process will start crashing after
       successfully starting as a part of the supervision tree. Default: `true`.
 
+    - `:label` - The label of the interpreter process. This label will be used to label the process
+      through `:proc_lib.set_label/1`. It will also be present in telemetry event metadata under
+      `:interpreter_label` key.
+
     - any other options will be passed to `GenServer.start_link/3`.
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
     {args, genserver_opts} =
-      Keyword.split(opts, [:python, :cd, :environment, :init_script, :sync_start?])
+      Keyword.split(opts, [:python, :cd, :environment, :init_script, :sync_start?, :label])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
   end
@@ -100,6 +105,11 @@ defmodule Snex.Interpreter do
   @spec init([option()]) ::
           {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
+    {label, opts} = Keyword.pop(opts, :label)
+
+    if label != nil and function_exported?(:proc_lib, :set_label, 1),
+      do: :proc_lib.set_label(label)
+
     if Keyword.get(opts, :sync_start?, true),
       do: {:ok, %State{port: init_python_port(opts)}},
       else: {:ok, %State{}, {:continue, {:init, opts}}}
