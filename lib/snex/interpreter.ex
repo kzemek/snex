@@ -60,21 +60,24 @@ defmodule Snex.Interpreter do
 
   ## Options
 
-    * `:python` - The Python executable to use. This can be a full path or a command to \
-      find via `System.find_executable/1`.
-    * `:cd` - The directory to change to before running the interpreter.
-    * `:environment` - A map of environment variables to set when running the Python \
-      executable.
-    * `:init_script` - A string of Python code to run when the interpreter is started.
-      Failing to run the script will cause the process initialization to fail. The variable
-      context left by the script will be the initial context for all `Snex.make_env/3` calls
-      using this interpreter.
-    * `:sync_start?` - If `true`, the interpreter will start and run the init script in the init
+    - `:python` - The Python executable to use. This can be a full path or a command to find
+      via `System.find_executable/1`.
+
+    - `:cd` - The directory to change to before running the interpreter.
+
+    - `:environment` - A map of environment variables to set when running the Python executable.
+
+    - `:init_script` - A string of Python code to run when the interpreter is started.
+      Failing to run the script will cause the process initialization to fail. The variable context
+      left by the script will be the initial context for all `Snex.make_env/3` calls using this
+      interpreter.
+
+    - `:sync_start?` - If `true`, the interpreter will start and run the init script in the init
       callback. Setting this to `false` is useful for long-running init scripts; the downside
       is that if something goes wrong, the interpreter process will start crashing after
       successfully starting as a part of the supervision tree. Default: `true`.
-    * any other options will be passed to `GenServer.start_link/3`.
 
+    - any other options will be passed to `GenServer.start_link/3`.
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
