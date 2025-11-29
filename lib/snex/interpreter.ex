@@ -36,11 +36,20 @@ defmodule Snex.Interpreter do
   """
   @type server :: GenServer.server()
 
+  @typep command :: Commands.Init.t() | Commands.MakeEnv.t() | Commands.Eval.t()
+  @typep request_id :: binary()
+
   # credo:disable-for-next-line
   alias __MODULE__, as: State
   defstruct [:port, pending: %{}]
 
-  defmacro __using__(opts), do: Internal.CustomInterpreter.using(__CALLER__.module, opts)
+  @typep state :: %State{
+           port: port(),
+           pending: %{optional(request_id()) => %{client: GenServer.from()}}
+         }
+
+  defmacro __using__(opts),
+    do: Internal.CustomInterpreter.using(__CALLER__.module, opts)
 
   @typedoc """
   Options for `start_link/1`.
@@ -88,6 +97,8 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
+  @spec init([option()]) ::
+          {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
     if Keyword.get(opts, :sync_start?, true),
       do: {:ok, %State{port: init_python_port(opts)}},
@@ -95,37 +106,46 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  def handle_continue({:init, opts}, _state),
-    do: {:noreply, %State{port: init_python_port(opts)}}
+  @spec handle_continue({:init, [option()]}, state()) ::
+          {:noreply, state()}
+  def handle_continue({:init, opts}, %State{} = state),
+    do: {:noreply, %State{state | port: init_python_port(opts)}}
 
   @impl GenServer
-  def handle_call(command, from, state) do
+  @spec handle_call(command(), GenServer.from(), state()) ::
+          {:noreply, state()} | {:reply, {:error, any()}, state()}
+  def handle_call(command, from, %State{} = state) do
     id = run_command(command, state.port)
-    {:noreply, %{state | pending: Map.put(state.pending, id, from)}}
+    pending = Map.put(state.pending, id, %{client: from})
+    {:noreply, %State{state | pending: pending}}
   rescue
     e -> {:reply, {:error, e}, state}
   end
 
   @impl GenServer
+  @spec handle_info(any(), state()) ::
+          {:noreply, state()} | {:stop, {:exit_status, non_neg_integer()}, state()}
   def handle_info(
         {port, {:data, <<id::binary-size(16), @response, data::binary>>}},
-        %{port: port} = state
+        %State{port: port} = state
       ) do
-    {client, pending} = Map.pop(state.pending, id)
+    {pending_entry, pending} = Map.pop(state.pending, id)
 
-    if client do
-      result = decode_reply(data, port)
-      GenServer.reply(client, result)
-    else
-      Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
+    case pending_entry do
+      %{client: client} ->
+        result = decode_reply(data, port)
+        GenServer.reply(client, result)
+
+      nil ->
+        Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
     end
 
-    {:noreply, %{state | pending: pending}}
+    {:noreply, %State{state | pending: pending}}
   end
 
   def handle_info(
         {port, {:data, <<_id::binary-size(16), @request, data::binary>>}},
-        %{port: port} = state
+        %State{port: port} = state
       ) do
     case Snex.Serde.decode(data) do
       {:ok, %{"command" => "send", "to" => to, "data" => data}} ->
@@ -135,11 +155,11 @@ defmodule Snex.Interpreter do
     {:noreply, state}
   end
 
-  def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
+  def handle_info({port, {:exit_status, status}}, %State{port: port} = state) do
     {:stop, {:exit_status, status}, state}
   end
 
-  def handle_info(message, state) do
+  def handle_info(message, %State{} = state) do
     Logger.warning("Received unexpected message: #{inspect(message)}")
     {:noreply, state}
   end
@@ -192,26 +212,45 @@ defmodule Snex.Interpreter do
 
   defp decode_reply(data, port) do
     case Snex.Serde.decode(data) do
-      {:ok, %{"status" => "ok"}} ->
-        :ok
-
-      {:ok, %{"status" => "ok_env", "id" => env_id}} ->
-        {:ok, Snex.Env.make(env_id, port, self())}
-
-      {:ok, %{"status" => "ok_value", "value" => value}} ->
-        {:ok, value}
-
-      {:ok, %{"status" => "error", "code" => code, "reason" => reason, "traceback" => traceback}} ->
-        # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
-        code = String.to_atom(code)
-        {:error, Snex.Error.exception(code: code, reason: reason, traceback: traceback)}
-
-      {:ok, value} ->
-        {:error, Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})}
+      {:ok, reply} ->
+        reply_to_result(reply, port)
 
       {:error, reason} ->
-        {:error,
-         Snex.Error.exception(code: :internal_error, reason: {:result_decode_error, reason, data})}
+        error =
+          Snex.Error.exception(
+            code: :internal_error,
+            reason: {:result_decode_error, reason, data}
+          )
+
+        {:error, error}
+    end
+  end
+
+  defp reply_to_result(reply, port) do
+    case reply do
+      %{"status" => "ok"} ->
+        :ok
+
+      %{"status" => "ok_env", "id" => env_id} ->
+        {:ok, Snex.Env.make(env_id, port, self())}
+
+      %{"status" => "ok_value", "value" => value} ->
+        {:ok, value}
+
+      %{"status" => "error", "code" => code, "reason" => reason} = data ->
+        error =
+          Snex.Error.exception(
+            # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+            code: String.to_atom(code),
+            reason: reason,
+            traceback: data["traceback"]
+          )
+
+        {:error, error}
+
+      value ->
+        error = Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})
+        {:error, error}
     end
   end
 end
