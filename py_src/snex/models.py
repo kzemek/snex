@@ -16,6 +16,12 @@ def generate_id() -> bytes:
     return random.randbytes(16)  # noqa: S311
 
 
+class Timestamps(TypedDict):
+    request_python_dequeued: int
+    request_decoded: NotRequired[int]
+    command_executed: NotRequired[int]
+
+
 class InitCommand(TypedDict):
     command: Literal["init"]
     code: str | None
@@ -43,15 +49,18 @@ class EvalCommand(TypedDict):
 
 class OkResponse(TypedDict):
     status: Literal["ok"]
+    timestamps: NotRequired[Timestamps]
 
 
 class OkEnvResponse(TypedDict):
     status: Literal["ok_env"]
+    timestamps: NotRequired[Timestamps]
     id: EnvID
 
 
 class OkValueResponse(TypedDict):
     status: Literal["ok_value"]
+    timestamps: NotRequired[Timestamps]
     value: Any
 
 
@@ -63,6 +72,7 @@ class SendCommand(TypedDict):
 
 class ErrorResponse(TypedDict):
     status: Literal["error"]
+    timestamps: NotRequired[Timestamps]
     code: Literal[
         "internal_error",
         "python_runtime_error",

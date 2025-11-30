@@ -6,6 +6,10 @@ defmodule Snex do
              |> String.replace("> [!IMPORTANT]", "> #### Important {: .info}")
 
   alias Snex.Internal.Commands
+  alias Snex.Internal.OSMonotonic
+  alias Snex.Internal.Telemetry
+
+  require Telemetry
 
   @typedoc """
   An "environment" is an Elixir-side reference to Python-side variable context in which your Python
@@ -126,13 +130,18 @@ defmodule Snex do
   def make_env(interpreter, additional_vars, opts) do
     check_additional_vars(additional_vars)
 
-    from = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
+    command = %Commands.MakeEnv{
+      from_env: opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter),
+      additional_vars: additional_vars
+    }
 
-    GenServer.call(
-      interpreter,
-      %Commands.MakeEnv{from_env: from, additional_vars: additional_vars},
-      :infinity
-    )
+    Telemetry.with_span [:snex, :make_env], start_time_var: start_time do
+      GenServer.call(
+        interpreter,
+        {OSMonotonic.to_portable_time(start_time), command},
+        :infinity
+      )
+    end
   end
 
   @doc """
@@ -228,16 +237,20 @@ defmodule Snex do
       with ret when is_list(ret) <- opts[:returning],
            do: "[#{Enum.join(ret, ", ")}]"
 
-    GenServer.call(
-      env.interpreter,
-      %Commands.Eval{
-        code: code,
-        env: env,
-        additional_vars: additional_vars,
-        returning: returning
-      },
-      Keyword.get(opts, :timeout, to_timeout(second: 5))
-    )
+    command = %Commands.Eval{
+      code: code,
+      env: env,
+      additional_vars: additional_vars,
+      returning: returning
+    }
+
+    Telemetry.with_span [:snex, :pyeval], start_time_var: start_time do
+      GenServer.call(
+        env.interpreter,
+        {OSMonotonic.to_portable_time(start_time), command},
+        Keyword.get(opts, :timeout, to_timeout(second: 5))
+      )
+    end
   end
 
   defp check_additional_vars(additional_vars) do

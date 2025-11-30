@@ -5,6 +5,7 @@ import asyncio
 import base64
 import functools
 import sys
+import time
 import traceback
 from typing import Any
 
@@ -20,6 +21,7 @@ from .models import (
     OkResponse,
     OkValueResponse,
     Response,
+    Timestamps,
     generate_id,
 )
 
@@ -111,9 +113,7 @@ async def run_eval(cmd: EvalCommand) -> Response:
     return OkResponse(status="ok")
 
 
-async def run(serialized_data: bytes) -> Response:
-    data: Command = serde.decode(serialized_data)
-
+async def run(data: Command) -> Response:
     if data["command"] == "init":
         return await run_init(data)
 
@@ -138,15 +138,21 @@ def on_task_done(
     writer: asyncio.WriteTransport,
     req_id: bytes,
     running_tasks: set[asyncio.Task[Any]],
-    task: asyncio.Task[Any],
+    timestamps: Timestamps,
+    task: asyncio.Task[Response],
 ) -> None:
     running_tasks.discard(task)
 
+    timestamps["command_executed"] = time.monotonic_ns()
+
     try:
-        transport.write_response(writer, req_id, task.result())
+        response = task.result()
+        response["timestamps"] = timestamps
+        transport.write_response(writer, req_id, response)
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
+            timestamps=timestamps,
             code="python_runtime_error",
             reason=str(e),
             traceback=traceback.format_exception(e),
@@ -164,6 +170,7 @@ async def run_loop() -> None:
     while True:
         try:
             byte_cnt = int.from_bytes(await reader.readexactly(4), "big")
+            timestamps = Timestamps(request_python_dequeued=time.monotonic_ns())
             all_data = await reader.readexactly(byte_cnt)
         except asyncio.IncompleteReadError:
             break
@@ -188,14 +195,24 @@ async def run_loop() -> None:
 
             serialized_data = all_data[17:]
 
-            task = loop.create_task(run(serialized_data))
+            data: Command = serde.decode(serialized_data)
+            timestamps["request_decoded"] = time.monotonic_ns()
+
+            task = loop.create_task(run(data))
             running_tasks.add(task)
             task.add_done_callback(
-                functools.partial(on_task_done, writer, req_id, running_tasks),
+                functools.partial(
+                    on_task_done,
+                    writer,
+                    req_id,
+                    running_tasks,
+                    timestamps,
+                ),
             )
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
+                timestamps=timestamps,
                 code="python_runtime_error",
                 reason=str(e),
                 traceback=traceback.format_exception(e),

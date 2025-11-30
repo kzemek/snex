@@ -28,6 +28,7 @@ defmodule Snex.MixProject do
   defp deps do
     [
       {:elixir_make, "~> 0.9.0", runtime: false},
+      {:telemetry, "~> 1.3"},
       # dev dependencies
       {:markdown_doctest, "~> 0.2.0", only: :test, runtime: false},
       {:ex_doc, "~> 0.38.1", only: :dev, runtime: false, optional: true},

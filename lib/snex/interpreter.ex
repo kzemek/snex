@@ -25,8 +25,11 @@ defmodule Snex.Interpreter do
 
   alias Snex.Internal
   alias Snex.Internal.Commands
+  alias Snex.Internal.OSMonotonic
+  alias Snex.Internal.Telemetry
 
   require Logger
+  require Telemetry
 
   @request 0
   @response 1
@@ -39,14 +42,18 @@ defmodule Snex.Interpreter do
 
   @typep command :: Commands.Init.t() | Commands.MakeEnv.t() | Commands.Eval.t()
   @typep request_id :: binary()
+  @typep timestamps :: %{optional(atom() | String.t()) => OSMonotonic.timestamp()}
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, pending: %{}]
+  defstruct [:port, :label, pending: %{}]
 
   @typep state :: %State{
-           port: port(),
-           pending: %{optional(request_id()) => %{client: GenServer.from()}}
+           port: :erlang.port(),
+           label: term(),
+           pending: %{
+             optional(request_id()) => %{client: GenServer.from(), timestamps: timestamps()}
+           }
          }
 
   defmacro __using__(opts),
@@ -118,16 +125,16 @@ defmodule Snex.Interpreter do
   @spec init([option()]) ::
           {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
-    {label, opts} = Keyword.pop(opts, :label)
+    label = opts[:label]
 
     if label != nil and function_exported?(:proc_lib, :set_label, 1),
       do: :proc_lib.set_label(label)
 
     with true <- !!Keyword.get(opts, :sync_start?, true),
          {:ok, port} <- init_python_port(opts) do
-      {:ok, %State{port: port}}
+      {:ok, %State{label: label, port: port}}
     else
-      false -> {:ok, %State{}, {:continue, {:init, opts}}}
+      false -> {:ok, %State{label: label}, {:continue, {:init, opts}}}
       {:error, reason} -> {:stop, reason}
     end
   end
@@ -143,11 +150,16 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  @spec handle_call(command(), GenServer.from(), state()) ::
+  @spec handle_call({OSMonotonic.portable_timestamp(), command()}, GenServer.from(), state()) ::
           {:noreply, state()} | {:reply, {:error, any()}, state()}
-  def handle_call(command, from, %State{} = state) do
+  def handle_call({start_ts, command}, from, %State{} = state) do
+    timestamps = %{start: OSMonotonic.from_portable_time(start_ts)}
+    timestamps = timestamp(timestamps, :request_elixir_received)
+
     id = run_command(command, state.port)
-    pending = Map.put(state.pending, id, %{client: from})
+    timestamps = timestamp(timestamps, :request_sent_to_python)
+
+    pending = Map.put(state.pending, id, %{client: from, timestamps: timestamps})
     {:noreply, %State{state | pending: pending}}
   rescue
     e -> {:reply, {:error, e}, state}
@@ -163,9 +175,18 @@ defmodule Snex.Interpreter do
     {pending_entry, pending} = Map.pop(state.pending, id)
 
     case pending_entry do
-      %{client: client} ->
-        result = decode_reply(data, port)
-        GenServer.reply(client, result)
+      %{client: client, timestamps: timestamps} ->
+        timestamps = timestamp(timestamps, :response_received)
+
+        {result, python_timestamps} = decode_reply(data, port)
+        timestamps = timestamp(timestamps, :response_decoded)
+        timestamps = Map.merge(timestamps, python_timestamps)
+
+        GenServer.reply(client, %Telemetry.Result{
+          value: result,
+          extra_measurements: telemetry_measurements(timestamps),
+          stop_metadata: %{interpreter_label: state.label}
+        })
 
       nil ->
         Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
@@ -196,6 +217,27 @@ defmodule Snex.Interpreter do
   end
 
   defp init_python_port(opts) do
+    Telemetry.with_span [:snex, :interpreter, :init],
+      start_meta: %{interpreter_label: opts[:label]},
+      start_time_var: start_time do
+      timestamps = %{start: start_time}
+
+      port = do_init_python_port(opts)
+      timestamps = timestamp(timestamps, :port_opened)
+
+      with {:ok, init_script_timestamps} <- run_init_script(port, opts) do
+        timestamps = Map.merge(timestamps, init_script_timestamps)
+
+        %Telemetry.Result{
+          value: {:ok, port},
+          extra_measurements: telemetry_measurements(timestamps),
+          stop_metadata: %{interpreter_label: opts[:label]}
+        }
+      end
+    end
+  end
+
+  defp do_init_python_port(opts) do
     python = System.find_executable(opts[:python] || "python")
     snex_pythonpath = Internal.Paths.snex_pythonpath()
 
@@ -211,31 +253,33 @@ defmodule Snex.Interpreter do
       |> Map.put("PYTHONPATH", pythonpath)
       |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
-    port =
-      Port.open(
-        {:spawn_executable, python},
-        [
-          :binary,
-          :exit_status,
-          :nouse_stdio,
-          packet: 4,
-          env: environment,
-          args: ["-m", "snex"]
-        ] ++ Keyword.take(opts, [:cd])
-      )
-
-    with :ok <- run_init_script(port, opts),
-         do: {:ok, port}
+    Port.open(
+      {:spawn_executable, python},
+      [
+        :binary,
+        :exit_status,
+        :nouse_stdio,
+        packet: 4,
+        env: environment,
+        args: ["-m", "snex"]
+      ] ++ Keyword.take(opts, [:cd])
+    )
   end
 
   defp run_init_script(port, opts) do
     id = run_command(%Commands.Init{code: opts[:init_script]}, port)
+    timestamps = timestamp(:request_sent_to_python)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
 
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response, port)
+        timestamps = timestamp(timestamps, :response_received)
+
+        {:ok, python_timestamps} = decode_reply(response, port)
+        timestamps = timestamp(timestamps, :response_decoded)
+
+        {:ok, Map.merge(timestamps, python_timestamps)}
     after
       init_script_timeout ->
         {:error, Snex.Error.exception(code: :init_script_timeout)}
@@ -252,7 +296,7 @@ defmodule Snex.Interpreter do
   defp decode_reply(data, port) do
     case Snex.Serde.decode(data) do
       {:ok, reply} ->
-        reply_to_result(reply, port)
+        {reply_to_result(reply, port), reply["timestamps"]}
 
       {:error, reason} ->
         error =
@@ -261,7 +305,7 @@ defmodule Snex.Interpreter do
             reason: {:result_decode_error, reason, data}
           )
 
-        {:error, error}
+        {{:error, error}, nil}
     end
   end
 
@@ -291,5 +335,26 @@ defmodule Snex.Interpreter do
         error = Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})
         {:error, error}
     end
+  end
+
+  defp timestamp(timestamps \\ %{}, key),
+    do: Map.put(timestamps, key, OSMonotonic.time())
+
+  defp telemetry_measurements(timestamps) do
+    for {measurement, start, stop} <- [
+          {:port_open_duration, :start, :port_opened},
+          {:request_elixir_queue_duration, :start, :request_elixir_received},
+          {:request_encoding_duration, :port_opened, :request_sent_to_python},
+          {:request_encoding_duration, :request_elixir_received, :request_sent_to_python},
+          {:request_python_queue_duration, :request_sent_to_python, "request_python_dequeued"},
+          {:request_decoding_duration, "request_python_dequeued", "request_decoded"},
+          {:command_execution_duration, "request_decoded", "command_executed"},
+          {:response_encoding_and_queue_duration, "command_executed", :response_received},
+          {:response_decoding_duration, :response_received, :response_decoded}
+        ],
+        start = timestamps[start],
+        stop = timestamps[stop],
+        into: %{},
+        do: {measurement, stop - start}
   end
 end
