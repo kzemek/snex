@@ -157,6 +157,9 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
 
   ```elixir
   Snex.make_env(interpreter, from: old_env)
+
+  # You can also omit the `interpreter` when using `:from`
+  Snex.make_env(from: old_env)
   ```
 
 - **copying variables from multiple environments (later override previous)**
@@ -178,12 +181,6 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
 > [!WARNING]
 >
 > The environments you copy from have to belong to the same interpreter!
-
-If you're passing a `:from` option, you can also omit the `interpreter` argument:
-
-```elixir
-  Snex.make_env(from: old_env)
-```
 
 #### Initialization script
 
