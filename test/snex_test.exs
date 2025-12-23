@@ -3,12 +3,20 @@ defmodule SnexTest do
   use MarkdownDoctest
 
   markdown_doctest "README.md",
-    except: &String.contains?(&1, ["defmodule", "def deps", "def project"])
+    except: &String.contains?(&1, ["defmodule", "def deps", "def project", "def handle_call"])
 
   setup do
     inp = start_link_supervised!(SnexTest.NumpyInterpreter)
     {:ok, env} = Snex.make_env(inp)
     %{inp: inp, env: env}
+  end
+
+  describe "from_env" do
+    test "can create a new environment from an existing environment", %{env: env} do
+      :ok = Snex.pyeval(env, "x = 1")
+      assert {:ok, new_env} = Snex.make_env(from: env)
+      assert {:ok, 1} = Snex.pyeval(new_env, returning: "x")
+    end
   end
 
   describe "binary & term serialization" do

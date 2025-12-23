@@ -13,6 +13,16 @@
   The timeout waits for the init script to finish, otherwise errors with `%Snex.Error{code: :init_script_timeout}`.
   It's set to 60 seconds by default.
 
+- **Add `Snex.get_interpreter/1` function to get the interpreter for a `Snex.Env`**
+
+- **Infer interpreter if `Snex.make_env` is created `:from` existing environments**
+
+  We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.get_interpreter(env), from: env)`.
+
+### Changes
+
+- Document `Snex.Env` garbage collection behavior in multi-node scenarios.
+
 ## 0.2.0
 
 ### Features

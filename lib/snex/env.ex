@@ -4,8 +4,8 @@ defmodule Snex.Env do
   the Python code is executed.
 
   This module is not intended to be used directly.
-  Instead, you would use the `Snex.make_env/3` to create environments and `Snex.pyeval/4`
-  to use them.
+  Instead, you would use the `Snex.make_env/3` to create environments, `Snex.pyeval/4`
+  to use them, and `Snex.get_interpreter/1` to get the interpreter for an environment.
 
   See `m:Snex#module-environments` module documentation for more details.
   """

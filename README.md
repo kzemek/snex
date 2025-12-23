@@ -179,6 +179,12 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
 >
 > The environments you copy from have to belong to the same interpreter!
 
+If you're passing a `:from` option, you can also omit the `interpreter` argument:
+
+```elixir
+  Snex.make_env(from: old_env)
+```
+
 #### Initialization script
 
 `Snex.Interpreter` can be given an `:init_script` option.
@@ -199,6 +205,33 @@ The init script runs on interpreter startup, and prepares a "base" environment s
 If your init script takes significant time, you can pass `sync_start: false` to `start_link/1`.
 This will return early from the interpreter startup, and run the Python interpreter - and the init script - asynchronously.
 The downside is that an issue with Python or the initialization code will cause the process to crash asynchronously instead of returning an error directly from `start_link/1`.
+
+#### Passing `Snex.Env` between Erlang nodes
+
+`Snex.Env` garbage collection can only track usage within the node it was created on.
+If you send a `%Snex.Env{}` value to another node `b@localhost`, and drop any references to the value on the original node `a@localhost`, the garbage collector may clean up the environment even though it's used on `b`.
+
+To avoid that, you can immediately call `Snex.make_env(from: node_a_env)` on `b@localhost`, making sure to keep the reference on `a@localhost` at least until the copy is finished:
+
+```elixir
+# a@localhost
+def pass_env(interpreter) do
+  {:ok, local_env} = Snex.make_env(interpreter)
+  :ok = GenServer.call({:my_genserver, :"b@localhost"}, {:snex_env, local_env})
+  # The remote process is done copying `local_env`, so we can let it be garbage collected
+  :ok
+end
+
+# b@localhost
+@impl GenServer
+def handle_call({:snex_env, remote_env}, _from, state) do
+  {:ok, env} = Snex.make_env(from: remote_env)
+  # We can safely use the new `env` without worrying about it being garbage collected
+  {:reply, :ok, Map.put(state, :env, env)}
+end
+```
+
+Alternatively, you can make sure to keep the original environment around by saving it in a long-lived process state, storing it in a global ETS, putting it in an `Agent`, etc.
 
 ### Serialization
 

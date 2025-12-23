@@ -50,11 +50,18 @@ defmodule Snex do
   @doc """
   Shorthand for `Snex.make_env/3`:
 
+      # when given a interpreter:
       Snex.make_env(interpreter, %{} = _additional_vars, [] = _opts)
 
+      # when given an `opts` list with `:from` option:
+      Snex.make_env(interpreter_from(opts[:from]), %{}, opts)
+
   """
-  @spec make_env(Snex.Interpreter.server()) ::
+  @spec make_env(Snex.Interpreter.server() | [make_env_opt()]) ::
           {:ok, env()} | {:error, Snex.Error.t() | any()}
+  def make_env(opts) when is_list(opts),
+    do: make_env(interpreter_from(opts[:from]), %{}, opts)
+
   def make_env(interpreter),
     do: make_env(interpreter, %{}, [])
 
@@ -67,7 +74,17 @@ defmodule Snex do
       # when given an `opts` list:
       Snex.make_env(interpreter, %{} = _additional_vars, opts)
 
+      # when given both `additional_vars` and `opts` lists:
+      Snex.make_env(interpreter_from(opts[:from]), additional_vars, opts)
+
   """
+  @spec make_env(
+          additional_vars(),
+          [make_env_opt()]
+        ) :: {:ok, env()} | {:error, Snex.Error.t() | any()}
+  def make_env(additional_vars, opts) when is_map(additional_vars) and is_list(opts),
+    do: make_env(interpreter_from(opts[:from]), additional_vars, opts)
+
   @spec make_env(
           Snex.Interpreter.server(),
           additional_vars() | [make_env_opt()]
@@ -134,6 +151,13 @@ defmodule Snex do
       :infinity
     )
   end
+
+  @doc """
+  Returns the interpreter that the given environment belongs to.
+  """
+  @spec get_interpreter(env()) :: Snex.Interpreter.server()
+  def get_interpreter(%Snex.Env{} = env),
+    do: env.interpreter
 
   @doc """
   Shorthand for `Snex.pyeval/4`:
@@ -267,6 +291,14 @@ defmodule Snex do
         end
 
       %Commands.MakeEnv.FromEnv{env: env, keys_mode: keys_mode, keys: keys}
+    end
+  end
+
+  defp interpreter_from(from) do
+    case List.wrap(from) do
+      [%Snex.Env{} = env | _] -> env.interpreter
+      [{%Snex.Env{} = env, _opts} | _] -> env.interpreter
+      _ -> raise(ArgumentError, "`from` must contain at least one environment")
     end
   end
 end
