@@ -206,7 +206,7 @@ async def run_loop() -> None:
                 file=sys.stderr,
                 end="\r\n",
             )
-            raise
+            sys.exit(123)
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
