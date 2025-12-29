@@ -193,6 +193,20 @@ async def run_loop() -> None:
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),
             )
+        except MemoryError as e:  # noqa: BLE001
+            result = ErrorResponse(
+                status="error",
+                code="python_runtime_error",
+                reason=str(e),
+                traceback=traceback.format_exception(e),
+            )
+            transport.write_response(writer, req_id, result)
+            print(  # noqa: T201
+                "Exiting due to a MemoryError",
+                file=sys.stderr,
+                end="\r\n",
+            )
+            raise
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
