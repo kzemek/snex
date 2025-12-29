@@ -1,3 +1,10 @@
+defprotocol Snex.Internal.Command do
+  @moduledoc false
+
+  @spec referenced_envs(t()) :: [Snex.Env.t()]
+  def referenced_envs(command)
+end
+
 defmodule Snex.Internal.Commands.Init do
   @moduledoc false
 
@@ -9,6 +16,11 @@ defmodule Snex.Internal.Commands.Init do
   @enforce_keys [:code]
   @derive JSON.Encoder
   defstruct [:code, command: "init"]
+
+  defimpl Snex.Internal.Command do
+    def referenced_envs(_command),
+      do: []
+  end
 end
 
 defmodule Snex.Internal.Commands.MakeEnv do
@@ -37,6 +49,11 @@ defmodule Snex.Internal.Commands.MakeEnv do
   @enforce_keys []
   @derive JSON.Encoder
   defstruct from_env: [], additional_vars: %{}, command: "make_env"
+
+  defimpl Snex.Internal.Command do
+    def referenced_envs(%@for{from_env: from_envs}),
+      do: Enum.map(from_envs, & &1.env)
+  end
 end
 
 defmodule Snex.Internal.Commands.Eval do
@@ -53,4 +70,9 @@ defmodule Snex.Internal.Commands.Eval do
   @enforce_keys [:code, :env]
   @derive JSON.Encoder
   defstruct [:code, :env, returning: nil, additional_vars: %{}, command: "eval"]
+
+  defimpl Snex.Internal.Command do
+    def referenced_envs(%@for{env: env}),
+      do: [env]
+  end
 end

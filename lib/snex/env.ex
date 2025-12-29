@@ -15,11 +15,12 @@ defmodule Snex.Env do
   @type t :: %__MODULE__{
           id: binary(),
           ref: :erlang.nif_resource(),
+          port: port(),
           interpreter: Snex.Interpreter.server()
         }
 
-  @enforce_keys [:id, :ref, :interpreter]
-  defstruct [:id, :ref, :interpreter]
+  @enforce_keys [:id, :ref, :port, :interpreter]
+  defstruct [:id, :ref, :port, :interpreter]
 
   @doc false
   @spec make(
@@ -31,9 +32,19 @@ defmodule Snex.Env do
     %__MODULE__{
       id: id,
       ref: EnvReferenceNif.make_ref(id, port),
+      port: port,
       interpreter: interpreter
     }
   end
+
+  @doc false
+  # This weird function makes sure the envs are not garbage collected before we're done using them.
+  # to the interpreter. BEAM turns out to be very aggressive about garbage collection in that
+  # it can drop our Snex.Env.EnvReferenceNif resource as soon as it's no longer used, not waiting
+  # until the end of the function.
+  @spec touch(envs :: list(t())) :: :ok
+  def touch(envs) when is_list(envs),
+    do: :ok
 end
 
 defmodule Snex.Internal.EnvReferenceNif do

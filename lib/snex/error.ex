@@ -21,6 +21,12 @@ defmodule Snex.Error do
   @typedoc "The error code indicating the init script timed out."
   @type init_script_timeout :: :init_script_timeout
 
+  @typedoc "The error code indicating the response was not received within the timeout."
+  @type response_timeout :: :response_timeout
+
+  @typedoc "The error code indicating communication with the interpreter failed."
+  @type interpreter_communication_failure :: :interpreter_communication_failure
+
   @typedoc """
   Error codes for all errors.
   """
@@ -30,6 +36,8 @@ defmodule Snex.Error do
           | env_not_found()
           | env_key_not_found()
           | init_script_timeout()
+          | response_timeout()
+          | interpreter_communication_failure()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.

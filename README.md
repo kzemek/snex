@@ -208,14 +208,17 @@ The downside is that an issue with Python or the initialization code will cause 
 `Snex.Env` garbage collection can only track usage within the node it was created on.
 If you send a `%Snex.Env{}` value to another node `b@localhost`, and drop any references to the value on the original node `a@localhost`, the garbage collector may clean up the environment even though it's used on `b`.
 
-To avoid that, you can immediately call `Snex.make_env(from: node_a_env)` on `b@localhost`, making sure to keep the reference on `a@localhost` at least until the copy is finished:
+To avoid that, you can immediately call `Snex.make_env(from: node_a_env)` on `b@localhost`, making sure to keep the reference on `a@localhost` at least until the copy is finished.
+Note that the BEAM VM can clean up variables as soon as just after their last use!
 
 ```elixir
 # a@localhost
 def pass_env(interpreter) do
   {:ok, local_env} = Snex.make_env(interpreter)
   :ok = GenServer.call({:my_genserver, :"b@localhost"}, {:snex_env, local_env})
-  # The remote process is done copying `local_env`, so we can let it be garbage collected
+  # Access `local_env` after GenServer.call() to make sure BEAM doesn't
+  # garbage-collect it before this point
+  local_env.__struct__
   :ok
 end
 

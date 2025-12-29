@@ -65,6 +65,35 @@ defmodule Snex.Interpreter do
           | {:label, term()}
           | GenServer.option()
 
+  @doc false
+  @spec command(server(), port(), command(), timeout()) ::
+          {:ok, term()} | {:error, Snex.Error.t() | term()}
+  def command(interpreter, port, command, timeout) do
+    envs = Internal.Command.referenced_envs(command)
+
+    with {:ok, {id, encoded_command}} <- encode_command(command),
+         request_id = :gen_server.send_request(interpreter, {:expect_reply, id}),
+         run_command(interpreter, port, encoded_command),
+         {:reply, reply} <- :gen_server.receive_response(request_id, timeout) do
+      Snex.Env.touch(envs)
+      decode_reply(reply, port, interpreter)
+    else
+      :timeout ->
+        {:error, Snex.Error.exception(code: :response_timeout)}
+
+      {:error, {reason, ^interpreter}} ->
+        {:error, Snex.Error.exception(code: :interpreter_communication_failure, reason: reason)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc false
+  @spec get_port(server()) :: port()
+  def get_port(interpreter),
+    do: GenServer.call(interpreter, :get_port)
+
   @doc """
   Starts a new Python interpreter.
 
@@ -143,14 +172,16 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  @spec handle_call(command(), GenServer.from(), state()) ::
-          {:noreply, state()} | {:reply, {:error, any()}, state()}
-  def handle_call(command, from, %State{} = state) do
-    id = run_command(command, state.port)
+  @spec handle_call(:get_port, GenServer.from(), state()) ::
+          {:reply, port(), state()}
+  def handle_call(:get_port, _from, %State{} = state),
+    do: {:reply, state.port, state}
+
+  @spec handle_call({:expect_reply, request_id()}, GenServer.from(), state()) ::
+          {:noreply, state()}
+  def handle_call({:expect_reply, id}, from, %State{} = state) do
     pending = Map.put(state.pending, id, %{client: from})
     {:noreply, %State{state | pending: pending}}
-  rescue
-    e -> {:reply, {:error, e}, state}
   end
 
   @impl GenServer
@@ -164,11 +195,18 @@ defmodule Snex.Interpreter do
 
     case pending_entry do
       %{client: client} ->
-        result = decode_reply(data, port)
-        GenServer.reply(client, result)
+        GenServer.reply(client, data)
 
       nil ->
-        Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
+        case decode_reply(data, port, self()) do
+          {:ok, result} ->
+            Logger.warning("Received data for unknown request #{inspect(id)}: #{inspect(result)}")
+
+          {:error, reason} ->
+            Logger.warning(
+              "Received data for unknown request #{inspect(id)} and encountered an error decoding it: #{inspect(reason)}"
+            )
+        end
     end
 
     {:noreply, %State{state | pending: pending}}
@@ -229,30 +267,41 @@ defmodule Snex.Interpreter do
   end
 
   defp run_init_script(port, opts) do
-    id = run_command(%Commands.Init{code: opts[:init_script]}, port)
+    command = %Commands.Init{code: opts[:init_script]}
+    {:ok, {id, encoded_command}} = encode_command(command)
+    run_command(self(), port, encoded_command)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
 
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response, port)
+        :ok = decode_reply(response, port, self())
     after
       init_script_timeout ->
         {:error, Snex.Error.exception(code: :init_script_timeout)}
     end
   end
 
-  defp run_command(command, port) do
-    id = :rand.bytes(16)
-    data = Snex.Serde.encode_to_iodata!(command)
-    Port.command(port, [id, @request, data])
-    id
+  defp run_command(interpreter, port, data) do
+    case GenServer.whereis(interpreter) do
+      owner when is_pid(owner) and node(owner) == node() ->
+        send(port, {owner, {:command, data}})
+
+      owner when is_pid(owner) ->
+        node = node(owner)
+        :erpc.cast(node, fn -> send(port, {owner, {:command, data}}) end)
+
+      {name, node} ->
+        :erpc.cast(node, fn -> send(port, {Process.whereis(name), {:command, data}}) end)
+    end
+
+    :ok
   end
 
-  defp decode_reply(data, port) do
+  defp decode_reply(data, port, interpreter) do
     case Snex.Serde.decode(data) do
       {:ok, reply} ->
-        reply_to_result(reply, port)
+        reply_to_result(reply, port, interpreter)
 
       {:error, reason} ->
         error =
@@ -265,13 +314,13 @@ defmodule Snex.Interpreter do
     end
   end
 
-  defp reply_to_result(reply, port) do
+  defp reply_to_result(reply, port, interpreter) do
     case reply do
       %{"status" => "ok"} ->
         :ok
 
       %{"status" => "ok_env", "id" => env_id} ->
-        {:ok, Snex.Env.make(env_id, port, self())}
+        {:ok, Snex.Env.make(env_id, port, interpreter)}
 
       %{"status" => "ok_value", "value" => value} ->
         {:ok, value}
@@ -291,5 +340,15 @@ defmodule Snex.Interpreter do
         error = Snex.Error.exception(code: :internal_error, reason: {:unknown_format, value})
         {:error, error}
     end
+  end
+
+  defp generate_request_id,
+    do: :rand.bytes(16)
+
+  defp encode_command(command) do
+    id = generate_request_id()
+    {:ok, {id, [id, @request, Snex.Serde.encode_to_iodata!(command)]}}
+  rescue
+    e -> {:error, e}
   end
 end

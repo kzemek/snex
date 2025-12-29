@@ -143,13 +143,16 @@ defmodule Snex do
   def make_env(interpreter, additional_vars, opts) do
     check_additional_vars(additional_vars)
 
-    from = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
+    from_env = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
+    command = %Commands.MakeEnv{from_env: from_env, additional_vars: additional_vars}
 
-    GenServer.call(
-      interpreter,
-      %Commands.MakeEnv{from_env: from, additional_vars: additional_vars},
-      :infinity
-    )
+    port =
+      case from_env do
+        [%Commands.MakeEnv.FromEnv{env: %Snex.Env{port: port}} | _] -> port
+        _ -> Snex.Interpreter.get_port(interpreter)
+      end
+
+    Snex.Interpreter.command(interpreter, port, command, :infinity)
   end
 
   @doc """
@@ -252,14 +255,18 @@ defmodule Snex do
       with ret when is_list(ret) <- opts[:returning],
            do: "[#{Enum.join(ret, ", ")}]"
 
-    GenServer.call(
-      env.interpreter,
+    command =
       %Commands.Eval{
         code: code,
         env: env,
         additional_vars: additional_vars,
         returning: returning
-      },
+      }
+
+    Snex.Interpreter.command(
+      env.interpreter,
+      env.port,
+      command,
       Keyword.get(opts, :timeout, to_timeout(second: 5))
     )
   end

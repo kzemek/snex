@@ -21,7 +21,13 @@
 
 ### Changes
 
-- Document `Snex.Env` garbage collection behavior in multi-node scenarios.
+- **Document `Snex.Env` garbage collection behavior in multi-node scenarios**
+
+- **Move serde work to Snex callers**
+
+  Serialization and deserialization on Elixir side is now done outside of `Snex.Interpreter` process.
+  The outside callers send data directly to the port (possibly with `:erpc` if remote).
+  `Snex.Interpreter` is now almost exclusively responsible for routing responses from Python.
 
 ## 0.2.0
 
