@@ -14,7 +14,9 @@ defmodule RelocatableTest.Interpreter do
     """
 end
 
-{:ok, interpreter} = RelocatableTest.Interpreter.start_link([])
+max_rss_bytes = 200 * 1024 * 1024
+
+{:ok, interpreter} = RelocatableTest.Interpreter.start_link([max_rss_bytes: max_rss_bytes])
 {:ok, env} = Snex.make_env(interpreter)
 {:ok, result} = Snex.pyeval(env, returning: "1 + 2")
 
@@ -27,9 +29,9 @@ pycode = """
   # Set address space limit to 195 MB
   limit_mb = 195
   limit_bytes = limit_mb * 1024 * 1024
-  resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+  #resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
   
-  print(f"PID {os.getpid()}: set RLIMIT_AS to {limit_mb} MB", file=sys.stderr)
+  #print(f"PID {os.getpid()}: set RLIMIT_AS to {limit_mb} MB", file=sys.stderr)
   
   # Now try to allocate 200 MB - this should fail
   # try:
@@ -38,12 +40,13 @@ pycode = """
   #     print(f"Allocated {arr.nbytes / 1024**2:.0f} MB", file=sys.stderr)
   # except MemoryError as e:
   #     print(f"MemoryError: Cannot allocate 200 MB with {limit_mb} MB limit", file=sys.stderr)
-  target_mb = 200
+  target_mb = 205
   arr = np.zeros(target_mb * 1024 * 1024, dtype=np.uint8)
+  arr += 4
   print(f"Allocated {arr.nbytes / 1024**2:.0f} MB", file=sys.stderr)
   """
 
-{:ok, result} = Snex.pyeval(env, pycode)
+:ok = Snex.pyeval(env, pycode)
 
 :erlang.apply(:os, :cmd, [~c"ps -eo pid,rss,comm | grep python | sort -k2 -rn"]) |> IO.puts()
 
