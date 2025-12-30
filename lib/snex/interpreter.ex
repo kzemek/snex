@@ -329,42 +329,13 @@ defmodule Snex.Interpreter do
   defp get_port_rss_bytes(port) do
     case Port.info(port, :os_pid) do
       {:os_pid, os_pid} ->
-        case get_rss_via_ps(os_pid) do
+        case Internal.System.get_rss_via_ps(os_pid) do
           {:ok, rss_bytes} -> {:ok, rss_bytes}
-          {:error, :ps_failed} -> get_rss_via_proc(os_pid)
+          {:error, :ps_failed} -> Internal.System.get_rss_via_proc(os_pid)
         end
 
       nil ->
         {:error, :port_closed}
-    end
-  end
-
-  # GNU/BSD ps, so Linux, macOS, BSD
-  defp get_rss_via_ps(os_pid) do
-    case System.cmd("ps", ["-o", "rss=", "-p", "#{os_pid}"], stderr_to_stdout: true) do
-      {output, 0} ->
-        rss_kb = output |> String.trim() |> String.to_integer()
-        {:ok, rss_kb * 1024}
-
-      {_output, _exit_code} ->
-        {:error, :ps_failed}
-    end
-  end
-
-  # BusyBox with limited ps
-  defp get_rss_via_proc(os_pid) do
-    case File.read("/proc/#{os_pid}/status") do
-      {:ok, content} ->
-        case Regex.run(~r/VmRSS:\s+(\d+)\s+kB/, content) do
-          [_, rss_kb] ->
-            {:ok, String.to_integer(rss_kb) * 1024}
-
-          nil ->
-            {:error, :vmrss_not_found}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 end
