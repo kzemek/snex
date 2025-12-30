@@ -37,7 +37,7 @@ defmodule Snex.Interpreter do
   """
   @type server :: GenServer.server()
 
-  @typep command :: Commands.Init.t() | Commands.MakeEnv.t() | Commands.Eval.t()
+  @typep command :: Commands.Init.t() | Commands.MakeEnv.t() | Commands.Eval.t() | Commands.GC.t()
   @typep request_id :: binary()
 
   # credo:disable-for-next-line
@@ -87,6 +87,15 @@ defmodule Snex.Interpreter do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc false
+  @spec command_noreply(server(), port(), command()) :: :ok
+  def command_noreply(interpreter, port, command) do
+    envs = Internal.Command.referenced_envs(command)
+    {:ok, {_id, encoded_command}} = encode_command(command)
+    run_command(interpreter, port, encoded_command)
+    Snex.Env.touch(envs)
   end
 
   @doc false

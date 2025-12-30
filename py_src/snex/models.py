@@ -41,6 +41,11 @@ class EvalCommand(TypedDict):
     additional_vars: dict[str, Any]
 
 
+class GCCommand(TypedDict):
+    command: Literal["gc"]
+    env: EnvID
+
+
 class OkResponse(TypedDict):
     status: Literal["ok"]
 
@@ -73,6 +78,6 @@ class ErrorResponse(TypedDict):
     traceback: NotRequired[list[str] | None]
 
 
-Command = InitCommand | MakeEnvCommand | EvalCommand
+Command = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
 Request = SendCommand
 Response = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse

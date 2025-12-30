@@ -5,10 +5,14 @@ defmodule SnexTest do
   markdown_doctest "README.md",
     except: &String.contains?(&1, ["defmodule", "def deps", "def project", "def handle_call"])
 
-  setup do
+  setup_all do
     inp = start_link_supervised!(SnexTest.NumpyInterpreter)
-    {:ok, env} = Snex.make_env(inp)
-    %{inp: inp, env: env}
+    %{inp: inp}
+  end
+
+  setup ctx do
+    {:ok, env} = Snex.make_env(ctx.inp)
+    %{env: env}
   end
 
   describe "from_env" do
@@ -131,7 +135,8 @@ defmodule SnexTest do
     end
 
     @tag capture_log: true
-    test "the interpreter exits on Python fatal error", %{inp: inp} do
+    test "the interpreter exits on Python fatal error" do
+      inp = start_link_supervised!(SnexTest.NumpyInterpreter)
       Process.flag(:trap_exit, true)
 
       %{port: port} = :sys.get_state(inp)

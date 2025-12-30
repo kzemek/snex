@@ -14,7 +14,7 @@ defmodule Snex.Env do
   @typedoc false
   @type t :: %__MODULE__{
           id: binary(),
-          ref: :erlang.nif_resource(),
+          ref: :erlang.nif_resource() | nil,
           port: port(),
           interpreter: Snex.Interpreter.server()
         }
@@ -23,18 +23,10 @@ defmodule Snex.Env do
   defstruct [:id, :ref, :port, :interpreter]
 
   @doc false
-  @spec make(
-          id :: binary(),
-          port :: :erlang.port(),
-          interpreter :: Snex.Interpreter.server()
-        ) :: t()
+  @spec make(id :: binary(), port(), Snex.Interpreter.server()) :: t()
   def make(id, port, interpreter) do
-    %__MODULE__{
-      id: id,
-      ref: EnvReferenceNif.make_ref(id, port),
-      port: port,
-      interpreter: interpreter
-    }
+    env = %__MODULE__{id: id, ref: nil, port: port, interpreter: interpreter}
+    %__MODULE__{env | ref: EnvReferenceNif.make_ref(env)}
   end
 
   @doc false
@@ -50,7 +42,7 @@ end
 defmodule Snex.Internal.EnvReferenceNif do
   @moduledoc false
   @on_load :load_nif
-  @nifs [make_ref: 2]
+  @nifs [make_ref: 1]
 
   defp load_nif do
     :code.priv_dir(:snex)
@@ -62,6 +54,6 @@ defmodule Snex.Internal.EnvReferenceNif do
   Creates a NIF reference that will send a `<<id::binary, "gc">> message to the
   port when garbage collected.
   """
-  @spec make_ref(id :: binary(), port()) :: :erlang.nif_resource()
-  def make_ref(_id, _port), do: :erlang.nif_error(:not_loaded)
+  @spec make_ref(Snex.Env.t()) :: :erlang.nif_resource()
+  def make_ref(_env), do: :erlang.nif_error(:not_loaded)
 end

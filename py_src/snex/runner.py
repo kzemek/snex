@@ -14,6 +14,7 @@ from .models import (
     EnvID,
     ErrorResponse,
     EvalCommand,
+    GCCommand,
     InitCommand,
     MakeEnvCommand,
     OkEnvResponse,
@@ -111,7 +112,11 @@ async def run_eval(cmd: EvalCommand) -> Response:
     return OkResponse(status="ok")
 
 
-async def run(serialized_data: bytes) -> Response:
+def run_gc(cmd: GCCommand) -> None:
+    envs.pop(cmd["env"], None)
+
+
+async def run(serialized_data: bytes) -> Response | None:
     data: Command = serde.decode(serialized_data)
 
     if data["command"] == "init":
@@ -123,15 +128,15 @@ async def run(serialized_data: bytes) -> Response:
     if data["command"] == "eval":
         return await run_eval(data)
 
+    if data["command"] == "gc":
+        run_gc(data)
+        return None
+
     return ErrorResponse(
         status="error",
         code="internal_error",
         reason=f"Unknown command: {data}",
     )
-
-
-def clean_env(env_id: EnvID) -> None:
-    envs.pop(env_id)
 
 
 def on_task_done(
@@ -143,7 +148,9 @@ def on_task_done(
     running_tasks.discard(task)
 
     try:
-        transport.write_response(writer, req_id, task.result())
+        result = task.result()
+        if result is not None:
+            transport.write_response(writer, req_id, result)
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -178,9 +185,6 @@ async def run_loop() -> None:
 
         try:
             req_id = all_data[:16]
-            if all_data[16:18] == b"gc":
-                clean_env(EnvID(req_id))
-                continue
 
             if all_data[16] != transport.MessageType.REQUEST:
                 msg = f"Invalid message type: request expected, got {all_data[16]}"

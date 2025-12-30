@@ -76,3 +76,21 @@ defmodule Snex.Internal.Commands.Eval do
       do: [env]
   end
 end
+
+defmodule Snex.Internal.Commands.GC do
+  @moduledoc false
+
+  @type t :: %__MODULE__{
+          command: String.t(),
+          env: Snex.Env.t()
+        }
+
+  @enforce_keys [:env]
+  @derive JSON.Encoder
+  defstruct [:env, command: "gc"]
+
+  defimpl Snex.Internal.Command do
+    def referenced_envs(%@for{env: env}),
+      do: [env]
+  end
+end

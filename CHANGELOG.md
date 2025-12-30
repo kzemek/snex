@@ -19,6 +19,20 @@
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.get_interpreter(env), from: env)`.
 
+## Fixes
+
+- **Fix `Snex.Env` usage in multi-node scenario**
+
+  NIFs can only operate on local pids/ports, so `Snex.make_env({:my_interpreter, :"othernode@localhost"})` would fail trying to create a local resource with a remote interpreter.
+  This is addressed by starting a garbage collector process on each Elixir node with Snex.
+  The new process acts as a local proxy that cleans up remote environments.
+
+- **Fix `Snex.Env` cleanup races**
+
+  `Snex.Env` could get cleaned up before a `Snex.pyeval` using it has finished.
+  This could happen because GC signals were processed immediately, while `Snex.pyeval` tasks are put onto a task queue.
+  The race is addressed by treating GC signals as another kind of task, getting rid of the special treatment, and making sure they get processed after a `Snex.pyeval` that happened before.
+
 ### Changes
 
 - **Document `Snex.Env` garbage collection behavior in multi-node scenarios**
