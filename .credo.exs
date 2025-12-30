@@ -165,7 +165,7 @@
           {Credo.Check.Warning.RaiseInsideRescue, []},
           {Credo.Check.Warning.SpecWithStruct, []},
           {Credo.Check.Warning.UnsafeExec, []},
-          {Credo.Check.Warning.UnsafeToAtom, []},
+          {Credo.Check.Warning.UnsafeToAtom, files: %{excluded: ["**/*_test.exs"]}},
           {Credo.Check.Warning.UnusedEnumOperation, []},
           {Credo.Check.Warning.UnusedFileOperation, []},
           {Credo.Check.Warning.UnusedKeywordOperation, []},
@@ -174,7 +174,7 @@
           {Credo.Check.Warning.UnusedRegexOperation, []},
           {Credo.Check.Warning.UnusedStringOperation, []},
           {Credo.Check.Warning.UnusedTupleOperation, []},
-          {Credo.Check.Warning.WrongTestFileExtension, []},
+          {Credo.Check.Warning.WrongTestFileExtension, []}
         ],
         disabled: [
           #
@@ -203,7 +203,7 @@
           {Credo.Check.Refactor.PipeChainStart, []},
           {Credo.Check.Refactor.VariableRebinding, []},
           {Credo.Check.Warning.LazyLogging, []},
-          {Credo.Check.Warning.LeakyEnvironment, []},
+          {Credo.Check.Warning.LeakyEnvironment, []}
 
           # {Credo.Check.Refactor.MapInto, []},
 

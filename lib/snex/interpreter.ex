@@ -71,21 +71,20 @@ defmodule Snex.Interpreter do
   def command(interpreter, port, command, timeout) do
     envs = Internal.Command.referenced_envs(command)
 
-    with {:ok, {id, encoded_command}} <- encode_command(command),
-         request_id = :gen_server.send_request(interpreter, {:expect_reply, id}),
-         run_command(interpreter, port, encoded_command),
-         {:reply, reply} <- :gen_server.receive_response(request_id, timeout) do
-      Snex.Env.touch(envs)
-      decode_reply(reply, port, interpreter)
-    else
+    {id, encoded_command} = encode_command(command)
+    request_id = :gen_server.send_request(interpreter, {:expect_reply, id})
+    run_command(interpreter, port, encoded_command)
+
+    case :gen_server.receive_response(request_id, timeout) do
+      {:reply, reply} ->
+        Snex.Env.touch(envs)
+        decode_reply(reply, port, interpreter)
+
       :timeout ->
         {:error, Snex.Error.exception(code: :response_timeout)}
 
-      {:error, {reason, ^interpreter}} ->
+      {:error, {reason, _server_ref}} ->
         {:error, Snex.Error.exception(code: :interpreter_communication_failure, reason: reason)}
-
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 
@@ -93,7 +92,7 @@ defmodule Snex.Interpreter do
   @spec command_noreply(server(), port(), command()) :: :ok
   def command_noreply(interpreter, port, command) do
     envs = Internal.Command.referenced_envs(command)
-    {:ok, {_id, encoded_command}} = encode_command(command)
+    {_id, encoded_command} = encode_command(command)
     run_command(interpreter, port, encoded_command)
     Snex.Env.touch(envs)
   end
@@ -228,6 +227,9 @@ defmodule Snex.Interpreter do
     case Snex.Serde.decode(data) do
       {:ok, %{"command" => "send", "to" => to, "data" => data}} ->
         send(to, data)
+
+      other ->
+        Logger.warning("Received unexpected request: #{inspect(other)}")
     end
 
     {:noreply, state}
@@ -277,7 +279,7 @@ defmodule Snex.Interpreter do
 
   defp run_init_script(port, opts) do
     command = %Commands.Init{code: opts[:init_script]}
-    {:ok, {id, encoded_command}} = encode_command(command)
+    {id, encoded_command} = encode_command(command)
     run_command(self(), port, encoded_command)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
@@ -356,8 +358,6 @@ defmodule Snex.Interpreter do
 
   defp encode_command(command) do
     id = generate_request_id()
-    {:ok, {id, [id, @request, Snex.Serde.encode_to_iodata!(command)]}}
-  rescue
-    e -> {:error, e}
+    {id, [id, @request, Snex.Serde.encode_to_iodata!(command)]}
   end
 end

@@ -6,14 +6,23 @@ from typing import TYPE_CHECKING, Any, Literal, NewType, TypedDict
 if TYPE_CHECKING:
     from typing import NotRequired
 
-    from .serde import ErlangTerm
-
 
 EnvID = NewType("EnvID", bytes)
 
 
 def generate_id() -> bytes:
     return random.randbytes(16)  # noqa: S311
+
+
+class Atom(str):
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return f"snex.Atom({super().__repr__()})"
+
+
+class Term(bytes):
+    __slots__ = ()
 
 
 class InitCommand(TypedDict):
@@ -62,7 +71,7 @@ class OkValueResponse(TypedDict):
 
 class SendCommand(TypedDict):
     command: Literal["send"]
-    to: ErlangTerm
+    to: Term
     data: Any
 
 

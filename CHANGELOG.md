@@ -1,4 +1,25 @@
-## 0.2.1 (Unreleased)
+## 0.3.0 (Unreleased)
+
+### Breaking
+
+- **Improved serialization**
+
+  Serialization protocol between Python & Elixir has been changed.
+  Instead of JSON encoding both ways, Elixir now encodes terms into a restricted Pickle (v5) format, while Python encodes objects into a restricted External Term Format.
+  The encoded data is then decoded with `pickle.loads()` on Python side, and `:erlang.binary_to_term/1` in Elixir.
+
+  Writing only encoders in both languages allows the implementation to be small and portable between versions, and reusing native decoding routines makes it highly performant - especially in Python.
+
+  Consequently:
+
+  - `Snex.Serde.Encoder` now requires an `encode/1` implementation, instead of `encode/2`
+  - tuples are now encoded as tuples instead of lists
+  - all Elixir terms can be encoded and round-tripped (fallback to `:erlang.term_to_binary/1`)
+  - all Python basic objects can be encoded
+  - floats preserve representation between languages
+  - encoding customization is available on both sides
+
+  Please consult the `Serialization` section of README.md for details.
 
 ### Features
 

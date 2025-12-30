@@ -2,7 +2,7 @@ import asyncio
 from enum import IntEnum
 from typing import Literal
 
-from . import serde
+from . import etf
 from .models import Request, Response
 
 
@@ -14,10 +14,12 @@ class MessageType(IntEnum):
 def _write_data(
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    data: tuple[Literal[MessageType.REQUEST], Request]
-    | tuple[Literal[MessageType.RESPONSE], Response],
+    data: (
+        tuple[Literal[MessageType.REQUEST], Request]
+        | tuple[Literal[MessageType.RESPONSE], Response]
+    ),
 ) -> None:
-    data_list = serde.encode(data[1])
+    data_list = etf.encode(data[1])
     data_len = sum(len(d) for d in data_list)
     bytes_cnt = len(req_id) + 1 + data_len
 
@@ -26,9 +28,9 @@ def _write_data(
             int.to_bytes(bytes_cnt, length=4, byteorder="big"),
             req_id,
             int.to_bytes(data[0], length=1, byteorder="big"),
-            *data_list,
         ],
     )
+    writer.writelines(data_list)
 
 
 def write_request(

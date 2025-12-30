@@ -1,60 +1,3 @@
-defmodule Snex.Serde.Binary do
-  @moduledoc false
-  @enforce_keys [:value]
-  defstruct [:value]
-  @typedoc false
-  @type t :: %__MODULE__{value: iodata()}
-end
-
-defmodule Snex.Serde.Term do
-  @moduledoc false
-  @enforce_keys [:value]
-  defstruct [:value]
-  @typedoc false
-  @type t :: %__MODULE__{value: term()}
-end
-
-defprotocol Snex.Serde.Encoder do
-  @moduledoc """
-  Protocol for custom encoding of Elixir terms to JSON used by Snex Serde.
-
-  If no implementation is defined, encoding falls back to `JSON` encoding
-  (`JSON.Encoder` and its defaults).
-
-  See the `m:Snex#module-serialization` module documentation for more detail.
-  """
-
-  @fallback_to_any true
-
-  @type encoder :: (term(), encoder() -> iodata())
-
-  @doc """
-  A function invoked to encode the given term to `t:iodata/0`.
-  """
-  @spec encode(term, encoder()) :: iodata
-  def encode(term, encoder)
-end
-
-defimpl Snex.Serde.Encoder, for: Snex.Serde.Binary do
-  def encode(%Snex.Serde.Binary{value: value}, encoder),
-    do: Snex.Serde.binary_encode("binary", value, encoder)
-end
-
-defimpl Snex.Serde.Encoder, for: Snex.Serde.Term do
-  def encode(%Snex.Serde.Term{value: value}, encoder),
-    do: Snex.Serde.binary_encode("term", :erlang.term_to_binary(value), encoder)
-end
-
-defimpl Snex.Serde.Encoder, for: Snex.Env do
-  def encode(%Snex.Env{id: id}, encoder),
-    do: Snex.Serde.binary_encode("env", id, encoder)
-end
-
-defimpl Snex.Serde.Encoder, for: Any do
-  def encode(term, encoder),
-    do: JSON.Encoder.encode(term, encoder)
-end
-
 defmodule Snex.Serde do
   @moduledoc """
   Serialization and deserialization between Elixir and Python.
@@ -62,85 +5,89 @@ defmodule Snex.Serde do
   See the `m:Snex#module-serialization` module documentation for more detail.
   """
 
-  alias __MODULE__
+  alias Snex.Internal.Pickler
 
-  @binary_acc_key {__MODULE__, :binary_acc}
+  require Pickler
 
-  @typep encoder :: (term(), encoder() -> iodata())
-  @opaque serde_binary :: Serde.Binary.t()
-  @opaque serde_term :: Serde.Term.t()
-
-  @doc false
-  @spec encode_to_iodata!(term(), encoder()) :: iodata()
-  def encode_to_iodata!(term, encoder \\ &protocol_encode/2) do
-    Process.put(@binary_acc_key, [])
-    data = encoder.(term, encoder)
-    binary_acc = Process.get(@binary_acc_key) |> Enum.reverse()
-    [<<IO.iodata_length(binary_acc)::32>>, binary_acc, data]
-  after
-    Process.delete(@binary_acc_key)
-  end
+  @opaque serde_binary :: Pickler.record_binary()
+  @opaque serde_term :: Pickler.record_object()
+  @opaque serde_object :: Pickler.record_object()
+  @opaque serde_float :: Pickler.record_float()
 
   @doc false
-  @spec decode(binary()) :: {:ok, term()} | {:error, :trailing_data | term()}
-  def decode(binary) when is_binary(binary) do
-    <<binary_len::32, binary_data::binary-size(binary_len), json::binary>> = binary
-    Process.put(@binary_acc_key, binary_data)
+  @spec encode_to_iodata!(term()) :: iodata()
+  def encode_to_iodata!(term),
+    do: Pickler.encode_to_iodata!(term)
 
-    with {decoded, _acc, rest} <- JSON.decode(json, [], object_finish: &decode_object_finish/2),
-         true <- String.trim(rest) == "" || {:error, :trailing_data},
-         do: {:ok, decoded}
-  after
-    Process.delete(@binary_acc_key)
+  @doc false
+  @spec decode(binary()) :: {:ok, term()} | {:error, term()}
+  def decode(binary) do
+    {:ok, :erlang.binary_to_term(binary)}
+  rescue
+    error -> {:error, error}
   end
 
   @doc """
-  Wraps an iodata value for efficient out-of-band passing to Python.
+  Wraps an iodata value to decode as `bytes` on the Python side.
   """
   @spec binary(iodata()) :: serde_binary()
   def binary(value) when is_binary(value) or is_list(value),
-    do: %Serde.Binary{value: value}
+    do: Pickler.binary(value: value)
 
   @doc """
-  Wraps an arbitrary Erlang term for efficient out-of-band passing to Python.
+  Wraps an arbitrary Erlang term for efficient passing to Python.
   The value will be opaque on the Python side and decoded back to the original Erlang term when
   returned to Elixir.
   """
   @spec term(term()) :: serde_term()
   def term(value),
-    do: %Serde.Term{value: value}
+    do: object("snex.models", "Term", [binary(:erlang.term_to_binary(value))])
 
-  @doc false
-  @spec protocol_encode(term(), encoder()) :: iodata()
-  def protocol_encode(struct, encoder) when is_struct(struct),
-    do: struct |> Serde.Encoder.encode(encoder)
+  @doc ~s'''
+  Builds a Python object from a module, class name, and arguments.
+  Arguments are encoded and passed to the Python object constructor.
 
-  def protocol_encode(tuple, encoder) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> encoder.(encoder)
+  ## Example
 
-  def protocol_encode(value, encoder),
-    do: value |> JSON.protocol_encode(encoder)
+      {:ok, "date"} =
+        Snex.pyeval(env, %{"d" => Snex.Serde.object("datetime", "date", [2025, 12, 28])},
+          returning: "type(d).__name__")
+  '''
+  @spec object(String.t(), String.t(), list()) :: serde_object()
+  def object(module, classname, args)
+      when is_binary(module) and is_binary(classname) and is_list(args),
+      do: Pickler.object(module: module, classname: classname, args: args)
 
-  @doc false
-  # Common implementation for encoding out-of-json binary data
-  @spec binary_encode(binary(), iodata(), encoder()) :: iodata()
-  def binary_encode(tag, data, encoder) when tag in ~w[binary term env] do
-    binary_acc = Process.get(@binary_acc_key)
-    len = IO.iodata_length(data)
-    Process.put(@binary_acc_key, [data | binary_acc])
-    encoder.(%{"__snex__" => [tag, len]}, encoder)
-  end
+  @doc """
+  Wraps a float value for decoding in Python.
 
-  defp decode_object_finish(acc, old_acc) do
-    case Map.new(acc) do
-      %{"__snex__" => [tag, size]} ->
-        <<data::binary-size(size), rest::binary>> = Process.get(@binary_acc_key)
-        Process.put(@binary_acc_key, rest)
-        value = if tag == "binary", do: data, else: :erlang.binary_to_term(data)
-        {value, old_acc}
+  Since Erlang floats can't represent infinity, -infinity or NaN, this function can be used to wrap
+  atoms `:inf`, `:"-inf"` or `:nan` to decode as the corresponding Python float.
+  """
+  @spec float(:"-inf" | :inf | :nan | float()) :: serde_float()
+  def float(value) when is_float(value) or value in [:inf, :"-inf", :nan],
+    do: Pickler.float(value: value)
+end
 
-      obj ->
-        {obj, old_acc}
-    end
-  end
+defprotocol Snex.Serde.Encoder do
+  @moduledoc """
+  Protocol for custom encoding of Elixir terms to a desired representation on the Python side
+  used by `Snex.Serde`.
+
+  If no implementation is defined, structs will be encoded "as-is".
+
+  See the `m:Snex#module-serialization` module documentation for more detail.
+  """
+
+  @doc """
+  A function invoked to encode the given term to a desired representation on the Python side.
+
+  The return value will be subject to recursive encoding. For example, if `encode/1` returns another
+  struct that implements `Snex.Serde.Encoder`, `encode/1` will be called again on the result.
+
+  If the return value is the same struct type (e.g. `encode(%X{}) -> %X{}`), it will be encoded like
+  a generic struct (i.e. as a `dict` with `__struct__` key).
+  """
+  @spec encode(term()) :: term()
+  def encode(term)
 end

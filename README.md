@@ -229,44 +229,91 @@ Alternatively, you can opt into manual management of `Snex.Env` lifetime by call
 
 ### Serialization
 
-By default, data is JSON-serialized using [`JSON`](https://hexdocs.pm/elixir/JSON.html) on the Elixir side and [`json`](https://docs.python.org/3/library/json.html) on the Python side.
-Among other things, this means that Python tuples will be serialized as arrays, while Elixir atoms and binaries will be encoded as strings.
+Elixir data is serialized using a limited subset of Python's Pickle format (version 5), and deserialized on Python side using `pickle.loads()`.
+Python data is serialized with a subset of Erlang's External Term Format, and deserialized on Elixir side using `:erlang.binary_to_term/1`.
+
+The serialization happens as outlined in the table:
+
+| (from) Elixir                | (to) Python     | (to) Elixir  | Comment                                                  |
+| ---------------------------- | --------------- | ------------ | -------------------------------------------------------- |
+| `nil`                        | `None`          | `nil`        |                                                          |
+| `boolean()`                  | `boolean`       | `boolean()`  |                                                          |
+| `atom()`                     | `snex.Atom`     | `atom()`     | `snex.Atom` is a subclass of `str`                       |
+| `integer()`                  | `int`           | `integer()`  | BigInts up to 2^32 bytes                                 |
+| `float()`                    | `float`         | `float()`    | Preserves representation                                 |
+| `Snex.Serde.float(:inf)`     | `float('inf')`  | `:inf`       | See `Snex.Serde.float/1`                                 |
+| `Snex.Serde.float(:"-inf")`  | `float('-inf')` | `:"-inf"`    |                                                          |
+| `Snex.Serde.float(:nan)`     | `float('NaN')`  | `:nan`       |                                                          |
+| `Snex.Serde.float(f)`        | `float`         | `f`          | Non-special float decodes to bare float                  |
+| `binary()`                   | `str`           | `binary()`   | Elixir binaries are assumed to be strings                |
+| `Snex.Serde.binary(b)`       | `bytes`         | `binary()`   |                                                          |
+|                              | `bytearray`     | `binary()`   |                                                          |
+|                              | `memoryview`    | `binary()`   |                                                          |
+| `Snex.Serde.object(m, n, a)` | `object`        |              | See `Snex.Serde.object/3`                                |
+| `Snex.Serde.term(t)`         | `snex.Term`     | `t`          | Opaquely round-trips `t`; `snex.Term` subclasses `bytes` |
+| `MapSet.t()`                 | `set`           | `MapSet.t()` |                                                          |
+|                              | `frozenset`     | `MapSet.t()` |                                                          |
+| `struct()`                   | `dict`          | `struct()`   | K/V pairs (including `__struct__`) recursively encoded   |
+| `map()`                      | `dict`          | `map()`      | K/V pairs recursively encoded                            |
+| `list()`                     | `list`          | `list()`     | Elements recursively encoded                             |
+| `tuple()`                    | `tuple`         | `tuple()`    | Elements recursively encoded                             |
+| `any()`                      | `snex.Term`     | `any()`      | Round-tripped with `:erlang.term_to_binary/1`            |
+
+> [!WARNING]
+>
+> In Python, `snex.Atom()` is a simple subclass of `str`, inheriting its `__eq__` and `__hash__` implementations.
+>
+> This means you can encode `"data" => %{foo: "bar"}` in Elixir, and access it with `data["foo"]` in Python.
+> However, it also means that `%{"foo" => "baz", foo: "bar"}` will encode either into `{"foo": "baz"}` or `{"foo": "bar"}`, depending on the map iteration order!
+
+#### Customizing serialization
+
+You can control struct encoding by implementing `Snex.Serde.Encoder` protocol.
+`Snex.Serde.Encoder.encode/1` will be called for any struct not explicitly handled in the table above, iif it implements the `Snex.Serde.Encoder` protocol.
+The result of the `encode/1` function will then be encoded again according to the table, with the same `Snex.Serde.Encoder` treatment if that result contains a struct.
+If `encode/1` returns the same struct type (e.g. `Snex.Serde.Encoder.encode(%X{}) -> %X{}`), the result will be encoded like a generic struct (i.e. as a `dict` with `__struct__` key).
+
+On the Python side, you can call `snex.set_custom_encoder(encoder_fun)` to add encoders for your objects.
+`encoder_fun` will only be called for objects that `Snex` doesn't know how to serialize.
+The result will then be encoded further according to the table above.
+
+##### Example: roundtrip serialization between an Elixir struct and Python object
 
 ```elixir
-{:ok, inp} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(inp)
-
-{:ok, ["hello", "world"]} =
-  Snex.pyeval(env, "x = ('hello', y)", %{"y" => :world}, returning: "x")
+defimpl Snex.Serde.Encoder, for: Date do
+  def encode(%Date{} = d),
+    do: Snex.Serde.object("datetime", "date", [d.year, d.month, d.day])
+end
 ```
 
-Snex will encode your structs to JSON using `Snex.Serde.Encoder`.
-If no implementation is defined, `Snex.Serde.Encoder` Snex falls back to `JSON.Encoder` and its defaults.
-
-#### Binary and term serialization
-
-For high‑performance transfer of opaque data, Snex supports out‑of‑band binary channels in addition to JSON:
-
-- `Snex.Serde.binary/1` efficiently passes Elixir binaries or iodata to Python as `bytes` without JSON re‑encoding.
-- Python `bytes` returned from `:returning` are received in Elixir as binaries.
-- `Snex.Serde.term/1` wraps any Erlang term; it is carried opaquely on the Python side and decoded back to the original Erlang term when returned to Elixir.
-
 ```elixir
-{:ok, inp} = Snex.Interpreter.start_link()
+{:ok, inp} = Snex.Interpreter.start_link(init_script: """
+  import datetime
+
+  def custom_encoder(obj):
+    if isinstance(obj, datetime.date):
+      return {
+        snex.Atom("__struct__"): snex.Atom("Elixir.Date"),
+        snex.Atom("day"): obj.day,
+        snex.Atom("month"): obj.month,
+        snex.Atom("year"): obj.year,
+        snex.Atom("calendar"): snex.Atom("Elixir.Calendar.ISO"),
+      }
+
+    raise TypeError(f"Cannot serialize object of {type(obj)}")
+
+  snex.set_custom_encoder(custom_encoder)
+  """)
+
 {:ok, env} = Snex.make_env(inp)
 
-# Pass iodata to Python
-{:ok, true} = Snex.pyeval(env,
-  %{"val" => Snex.Serde.binary([<<1, 2, 3>>, 4])},
-  returning: "val == b'\\x01\\x02\\x03\\x04'")
-
-# Receive Python bytes as an Elixir binary
-{:ok, <<1, 2, 3>>} = Snex.pyeval(env, returning: "b'\\x01\\x02\\x03'")
-
-# Round‑trip an arbitrary Erlang term through Python
-self = self(); ref = make_ref()
-{:ok, {^self, ^ref}} =
-  Snex.pyeval(env, %{"val" => Snex.Serde.term({self, ref})}, returning: "val")
+{:ok, {{"datetime", "date"}, %Date{year: 2026, month: 12, day: 27}}} =
+  Snex.pyeval(env, """
+    typ = type(date)
+    next_date = date + datetime.timedelta(days=364)
+    """,
+    %{"date" => Date.new!(2025, 12, 28)},
+    returning: "((typ.__module__, typ.__name__), next_date)")
 ```
 
 ### Run async code

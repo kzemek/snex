@@ -9,17 +9,22 @@ defmodule Snex.Internal.Commands.Init do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          command: String.t(),
           code: String.t() | nil
         }
 
   @enforce_keys [:code]
-  @derive JSON.Encoder
-  defstruct [:code, command: "init"]
+  defstruct [:code]
 
   defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
     def referenced_envs(_command),
       do: []
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{} = command),
+      do: %{"command" => "init", "code" => command.code}
   end
 end
 
@@ -36,23 +41,40 @@ defmodule Snex.Internal.Commands.MakeEnv do
           }
 
     @enforce_keys [:env]
-    @derive JSON.Encoder
     defstruct [:env, keys_mode: :except, keys: []]
   end
 
   @type t :: %__MODULE__{
-          command: String.t(),
           from_env: [FromEnv.t()],
           additional_vars: %{String.t() => term()}
         }
 
   @enforce_keys []
-  @derive JSON.Encoder
-  defstruct from_env: [], additional_vars: %{}, command: "make_env"
+  defstruct from_env: [], additional_vars: %{}
 
   defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
     def referenced_envs(%@for{from_env: from_envs}),
       do: Enum.map(from_envs, & &1.env)
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{} = command) do
+      %{
+        "command" => "make_env",
+        "additional_vars" => command.additional_vars,
+        "from_env" =>
+          Enum.map(
+            command.from_env,
+            &%{
+              "env" => Snex.Serde.binary(&1.env.id),
+              "keys_mode" => Atom.to_string(&1.keys_mode),
+              "keys" => &1.keys
+            }
+          )
+      }
+    end
   end
 end
 
@@ -60,7 +82,6 @@ defmodule Snex.Internal.Commands.Eval do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          command: String.t(),
           code: String.t() | nil,
           env: Snex.Env.t(),
           returning: String.t() | nil,
@@ -68,12 +89,25 @@ defmodule Snex.Internal.Commands.Eval do
         }
 
   @enforce_keys [:code, :env]
-  @derive JSON.Encoder
-  defstruct [:code, :env, returning: nil, additional_vars: %{}, command: "eval"]
+  defstruct [:code, :env, returning: nil, additional_vars: %{}]
 
   defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
     def referenced_envs(%@for{env: env}),
       do: [env]
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{} = command) do
+      %{
+        "command" => "eval",
+        "code" => command.code,
+        "env" => Snex.Serde.binary(command.env.id),
+        "returning" => command.returning,
+        "additional_vars" => command.additional_vars
+      }
+    end
   end
 end
 
@@ -81,16 +115,21 @@ defmodule Snex.Internal.Commands.GC do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          command: String.t(),
           env: Snex.Env.t()
         }
 
   @enforce_keys [:env]
-  @derive JSON.Encoder
-  defstruct [:env, command: "gc"]
+  defstruct [:env]
 
   defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
     def referenced_envs(%@for{env: env}),
       do: [env]
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{} = command),
+      do: %{"command" => "gc", "env" => Snex.Serde.binary(command.env.id)}
   end
 end

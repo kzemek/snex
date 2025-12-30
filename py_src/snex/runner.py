@@ -4,11 +4,12 @@ import ast
 import asyncio
 import base64
 import functools
+import pickle
 import sys
 import traceback
 from typing import Any
 
-from . import interface, serde, transport
+from . import interface, transport
 from .models import (
     Command,
     EnvID,
@@ -116,9 +117,7 @@ def run_gc(cmd: GCCommand) -> None:
     envs.pop(cmd["env"], None)
 
 
-async def run(serialized_data: bytes) -> Response | None:
-    data: Command = serde.decode(serialized_data)
-
+async def run(data: Command) -> Response | None:
     if data["command"] == "init":
         return await run_init(data)
 
@@ -171,7 +170,7 @@ async def run_loop() -> None:
     while True:
         try:
             byte_cnt = int.from_bytes(await reader.readexactly(4), "big")
-            all_data = await reader.readexactly(byte_cnt)
+            all_data = memoryview(await reader.readexactly(byte_cnt))
         except asyncio.IncompleteReadError:
             break
 
@@ -190,9 +189,9 @@ async def run_loop() -> None:
                 msg = f"Invalid message type: request expected, got {all_data[16]}"
                 raise ValueError(msg)  # noqa: TRY301
 
-            serialized_data = all_data[17:]
+            command: Command = pickle.loads(all_data[17:])  # noqa: S301
 
-            task = loop.create_task(run(serialized_data))
+            task = loop.create_task(run(command))
             running_tasks.add(task)
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),
