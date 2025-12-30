@@ -21,6 +21,9 @@ defmodule Snex.Error do
   @typedoc "The error code indicating the init script timed out."
   @type init_script_timeout :: :init_script_timeout
 
+  @typedoc "The error code indicating the interpreter exceeded maximum RSS memory."
+  @type max_rss_bytes :: :max_rss_bytes
+
   @typedoc """
   Error codes for all errors.
   """
@@ -30,6 +33,7 @@ defmodule Snex.Error do
           | env_not_found()
           | env_key_not_found()
           | init_script_timeout()
+          | max_rss_bytes()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.

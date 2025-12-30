@@ -185,7 +185,8 @@ defmodule Snex.Interpreter do
     state = %State{state | pending: pending}
 
     if rss_exceeded?(state) do
-      {:stop, {:shutdown, :max_rss_bytes}, state}
+      reply_to_all_pending(state, {:error, Snex.Error.exception(code: :max_rss_bytes)})
+      {:stop, {:shutdown, :max_rss_bytes}, %State{state | pending: %{}}}
     else
       {:noreply, state}
     end
@@ -317,6 +318,12 @@ defmodule Snex.Interpreter do
       {:ok, rss_bytes} -> rss_bytes > max_rss_bytes
       {:error, _reason} -> false
     end
+  end
+
+  defp reply_to_all_pending(%State{pending: pending}, reply) do
+    Enum.each(pending, fn {_id, %{client: client}} ->
+      GenServer.reply(client, reply)
+    end)
   end
 
   defp get_port_rss_bytes(port) do
