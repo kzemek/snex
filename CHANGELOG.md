@@ -22,11 +22,11 @@
   `Snex.Env.disable_gc/1` can be called on the node that created the environment.
   Once called, the Python-side environment will only be destroyed on explicit `Snex.destroy_env/1` or on interpreter shutdown.
 
-- **Add `Snex.get_interpreter/1` function to get the interpreter for a `Snex.Env`**
+- **Add `Snex.Env.interpreter/1` function to get the interpreter for a `Snex.Env`**
 
 - **Infer interpreter if `Snex.make_env` is created `:from` existing environments**
 
-  We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.get_interpreter(env), from: env)`.
+  We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
 
 ## Fixes
 
@@ -51,6 +51,11 @@
   Serialization and deserialization on Elixir side is now done outside of `Snex.Interpreter` process.
   The outside callers send data directly to the port (possibly with `:erpc` if remote).
   `Snex.Interpreter` is now almost exclusively responsible for routing responses from Python.
+
+- **Un-opaque the type of `Snex.Env{}`**
+
+  `%Snex.Env{}` is directly referenced in the docs all over, so it makes sense to publicly type it with `Snex.Env.t()`.
+  This replaces the previous opaque `Snex.env()` type.
 
 ## 0.2.0
 

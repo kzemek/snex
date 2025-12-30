@@ -10,12 +10,12 @@ defmodule Snex.Error do
   @type internal_error :: :internal_error
 
   @typedoc """
-  The error code indicating an environment referenced by the passed in `t:Snex.env/0` is not found in
+  The error code indicating an environment referenced by the passed in `t:Snex.Env.t/0` is not found in
   the Python interpreter that ran the command.
   """
   @type env_not_found :: :env_not_found
 
-  @typedoc "The error code indicating a key is not found in the `t:Snex.env/0`."
+  @typedoc "The error code indicating a key is not found in the `t:Snex.Env.t/0`."
   @type env_key_not_found :: :env_key_not_found
 
   @typedoc "The error code indicating the init script timed out."

@@ -8,14 +8,6 @@ defmodule Snex do
   alias Snex.Internal.Commands
 
   @typedoc """
-  An "environment" is an Elixir-side reference to Python-side variable context in which your Python
-  code will run.
-
-  See `Snex.make_env/3` for more information.
-  """
-  @opaque env() :: Snex.Env.t()
-
-  @typedoc """
   A string of Python code to be evaluated.
 
   See `Snex.pyeval/4`.
@@ -35,7 +27,7 @@ defmodule Snex do
   See `Snex.make_env/3`.
   """
   @type from_env ::
-          env() | {env(), [only: [String.t()], except: [String.t()]]}
+          Snex.Env.t() | {Snex.Env.t(), [only: [String.t()], except: [String.t()]]}
 
   @typedoc """
   Option for `Snex.make_env/3`.
@@ -58,7 +50,7 @@ defmodule Snex do
 
   """
   @spec make_env(Snex.Interpreter.server() | [make_env_opt()]) ::
-          {:ok, env()} | {:error, Snex.Error.t() | any()}
+          {:ok, Snex.Env.t()} | {:error, Snex.Error.t() | any()}
   def make_env(opts) when is_list(opts),
     do: make_env(interpreter_from(opts[:from]), %{}, opts)
 
@@ -81,14 +73,14 @@ defmodule Snex do
   @spec make_env(
           additional_vars(),
           [make_env_opt()]
-        ) :: {:ok, env()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, Snex.Env.t()} | {:error, Snex.Error.t() | any()}
   def make_env(additional_vars, opts) when is_map(additional_vars) and is_list(opts),
     do: make_env(interpreter_from(opts[:from]), additional_vars, opts)
 
   @spec make_env(
           Snex.Interpreter.server(),
           additional_vars() | [make_env_opt()]
-        ) :: {:ok, env()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, Snex.Env.t()} | {:error, Snex.Error.t() | any()}
   def make_env(interpreter, additional_vars) when is_map(additional_vars),
     do: make_env(interpreter, additional_vars, [])
 
@@ -139,7 +131,7 @@ defmodule Snex do
           Snex.Interpreter.server(),
           additional_vars(),
           [make_env_opt()]
-        ) :: {:ok, env()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, Snex.Env.t()} | {:error, Snex.Error.t() | any()}
   def make_env(interpreter, additional_vars, opts) do
     check_additional_vars(additional_vars)
 
@@ -154,13 +146,6 @@ defmodule Snex do
 
     Snex.Interpreter.command(interpreter, port, command, :infinity)
   end
-
-  @doc """
-  Returns the interpreter that the given environment belongs to.
-  """
-  @spec get_interpreter(env()) :: Snex.Interpreter.server()
-  def get_interpreter(%Snex.Env{} = env),
-    do: env.interpreter
 
   @doc """
   Destroys an environment created with `Snex.make_env/3`.
@@ -194,7 +179,7 @@ defmodule Snex do
 
   """
   @spec pyeval(
-          env(),
+          Snex.Env.t(),
           code() | additional_vars() | [pyeval_opt()]
         ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(%Snex.Env{} = env, code) when is_binary(code),
@@ -220,7 +205,7 @@ defmodule Snex do
 
   """
   @spec pyeval(
-          env(),
+          Snex.Env.t(),
           code() | nil | additional_vars(),
           additional_vars() | [pyeval_opt()]
         ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
@@ -260,7 +245,7 @@ defmodule Snex do
 
   '''
   @spec pyeval(
-          env(),
+          Snex.Env.t(),
           code() | nil,
           additional_vars(),
           [pyeval_opt()]

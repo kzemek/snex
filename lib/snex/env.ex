@@ -5,23 +5,32 @@ defmodule Snex.Env do
 
   This module is not intended to be used directly.
   Instead, you would use the `Snex.make_env/3` to create environments, `Snex.pyeval/4`
-  to use them, and `Snex.get_interpreter/1` to get the interpreter for an environment.
+  to use them.
 
-  The only exception is `Snex.Env.disable_gc/1`, which can be called to opt into manual management
-  of the environment lifecycle.
+  The only exceptions are `Snex.Env.disable_gc/1`, which can be called to opt into manual management
+  of the environment lifecycle, and `Snex.Env.interpreter/1`, which can be used to get
+  the interpreter the environment is bound to.
 
   See `m:Snex#module-environments` module documentation for more details.
   """
   alias Snex.Internal.EnvReferenceNif
 
-  @typedoc false
+  @opaque id :: binary()
+
+  @typedoc """
+  Elixir-side reference to a Python-side environment.
+
+  The `id` field can be used to identify the environment, but its underlying type can change without
+  notice. All other fields should be considered an implementation detail and never used directly.
+  """
   @type t :: %__MODULE__{
-          id: binary(),
+          id: id(),
           ref: :erlang.nif_resource() | nil,
           port: port(),
           interpreter: Snex.Interpreter.server()
         }
 
+  @derive {Inspect, only: [:id]}
   @enforce_keys [:id, :ref, :port, :interpreter]
   defstruct [:id, :ref, :port, :interpreter]
 
@@ -31,6 +40,13 @@ defmodule Snex.Env do
     env = %__MODULE__{id: id, ref: nil, port: port, interpreter: interpreter}
     %__MODULE__{env | ref: EnvReferenceNif.make_ref(env)}
   end
+
+  @doc """
+  Returns the interpreter that the given environment belongs to.
+  """
+  @spec interpreter(t()) :: Snex.Interpreter.server()
+  def interpreter(%__MODULE__{interpreter: interpreter}),
+    do: interpreter
 
   @doc """
   Disables automatic garbage collection for the given environment.
