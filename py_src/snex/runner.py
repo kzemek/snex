@@ -157,7 +157,7 @@ def on_task_done(
             file=sys.stderr,
             end="\r\n",
         )
-        sys.exit(124)
+        raise
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -220,7 +220,7 @@ async def run_loop() -> None:
                 file=sys.stderr,
                 end="\r\n",
             )
-            sys.exit(123)
+            raise
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
