@@ -102,4 +102,31 @@ defmodule SnexTest do
       assert_receive {:EXIT, ^inp, %Snex.Error{code: :init_script_timeout}}
     end
   end
+
+  describe "wrap_exec" do
+    test "can wrap the python executable with a function" do
+      {:ok, inp} =
+        Snex.Interpreter.start_link(
+          wrap_exec: &wrap_with_env/2,
+          init_script: "import os"
+        )
+
+      {:ok, env} = Snex.make_env(inp)
+      assert {:ok, "42"} = Snex.pyeval(env, returning: "os.getenv('TESTVAR')")
+    end
+
+    test "can wrap the python executable with an MFA" do
+      {:ok, inp} =
+        SnexTest.NumpyInterpreter.start_link(
+          wrap_exec: {__MODULE__, :wrap_with_env, []},
+          init_script: "import os"
+        )
+
+      {:ok, env} = Snex.make_env(inp)
+      assert {:ok, "42"} = Snex.pyeval(env, returning: "os.getenv('TESTVAR')")
+    end
+
+    @spec wrap_with_env(String.t(), [String.t()]) :: {String.t(), [String.t()]}
+    def wrap_with_env(python, args), do: {"/usr/bin/env", ["TESTVAR=42", python | args]}
+  end
 end

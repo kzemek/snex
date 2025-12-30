@@ -49,6 +49,11 @@
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
 
+- **Add `:wrap_exec` option for `Snex.Interpreter`**
+
+  Allows customizing how the Python process is spawned by wrapping the executable path and arguments.
+  This can be used e.g. to run Python inside a Docker container, see `docker_example_test.exs`.
+
 ## Fixes
 
 - **Fix `Snex.Env` usage in multi-node scenario**

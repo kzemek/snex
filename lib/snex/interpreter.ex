@@ -57,6 +57,7 @@ defmodule Snex.Interpreter do
   """
   @type option ::
           {:python, String.t()}
+          | {:wrap_exec, mfa() | (String.t(), [String.t()] -> {String.t(), [String.t()]})}
           | {:cd, Path.t()}
           | {:environment, %{optional(String.t()) => String.t()}}
           | {:init_script, String.t()}
@@ -112,6 +113,10 @@ defmodule Snex.Interpreter do
     - `:python` - The Python executable to use. This can be a full path or a command to find
       via `System.find_executable/1`.
 
+    - `:wrap_exec` - A function to wrap the Python executable and arguments. It can be given
+      as an MFA or a function that takes two arguments: the Python executable path
+      and its arguments. If given as MFA, the arguments will be appended to the A list.
+
     - `:cd` - The directory to change to before running the interpreter.
 
     - `:environment` - A map of environment variables to set when running the Python executable.
@@ -140,6 +145,7 @@ defmodule Snex.Interpreter do
     {args, genserver_opts} =
       Keyword.split(opts, [
         :python,
+        :wrap_exec,
         :cd,
         :environment,
         :init_script,
@@ -260,16 +266,25 @@ defmodule Snex.Interpreter do
       |> Map.put("PYTHONPATH", pythonpath)
       |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
+    default_args = ["-m", "snex"]
+
+    {exec, args} =
+      case opts[:wrap_exec] do
+        nil -> {python, default_args}
+        {m, f, a} -> apply(m, f, a ++ [python, default_args])
+        fun when is_function(fun, 2) -> fun.(python, default_args)
+      end
+
     port =
       Port.open(
-        {:spawn_executable, python},
+        {:spawn_executable, exec},
         [
           :binary,
           :exit_status,
           :nouse_stdio,
           packet: 4,
           env: environment,
-          args: ["-m", "snex"]
+          args: args
         ] ++ Keyword.take(opts, [:cd])
       )
 
