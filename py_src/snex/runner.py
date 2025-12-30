@@ -144,14 +144,6 @@ def on_task_done(
 
     try:
         transport.write_response(writer, req_id, task.result())
-    except MemoryError as e:  # noqa: BLE001
-        result = ErrorResponse(
-            status="error",
-            code="python_memory_error",
-            reason=str(e),
-            traceback=traceback.format_exception(e),
-        )
-        transport.write_response(writer, req_id, result)
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -201,14 +193,6 @@ async def run_loop() -> None:
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),
             )
-        except MemoryError as e:  # noqa: BLE001
-            result = ErrorResponse(
-                status="error",
-                code="python_memory_error",
-                reason=str(e),
-                traceback=traceback.format_exception(e),
-            )
-            transport.write_response(writer, req_id, result)
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",

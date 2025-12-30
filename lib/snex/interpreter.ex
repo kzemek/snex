@@ -156,7 +156,6 @@ defmodule Snex.Interpreter do
   @impl GenServer
   @spec handle_info(any(), state()) ::
           {:noreply, state()}
-          | {:stop, :normal, state()}
           | {:stop, {:exit_status, non_neg_integer()}, state()}
   def handle_info(
         {port, {:data, <<id::binary-size(16), @response, data::binary>>}},
@@ -169,18 +168,11 @@ defmodule Snex.Interpreter do
         result = decode_reply(data, port)
         GenServer.reply(client, result)
 
-        case result do
-          {:error, %Snex.Error{code: :python_memory_error}} ->
-            {:stop, :normal, %State{state | pending: pending}}
-
-          _ ->
-            {:noreply, %State{state | pending: pending}}
-        end
-
       nil ->
         Logger.warning("Received data for unknown request #{inspect(id)} #{inspect(data)}")
-        {:noreply, %State{state | pending: pending}}
     end
+
+    {:noreply, %State{state | pending: pending}}
   end
 
   def handle_info(
