@@ -27,6 +27,9 @@ defmodule Snex.Error do
   @typedoc "The error code indicating communication with the interpreter failed."
   @type interpreter_communication_failure :: :interpreter_communication_failure
 
+  @typedoc "The error code indicating the interpreter exited with a non-zero status."
+  @type interpreter_exited :: :interpreter_exited
+
   @typedoc """
   Error codes for all errors.
   """

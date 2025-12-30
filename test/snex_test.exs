@@ -58,6 +58,16 @@ defmodule SnexTest do
     end
 
     @tag capture_log: true
+    test "the interpreter exits if Port fails to start" do
+      Process.flag(:trap_exit, true)
+
+      {:error, %Snex.Error{code: :interpreter_exited, reason: {:exit_status, 127}}} =
+        Snex.Interpreter.start_link(
+          wrap_exec: fn _python, _args -> {"/bin/bash", ["-c", "nonexistent 2>/dev/null"]} end
+        )
+    end
+
+    @tag capture_log: true
     test "the interpreter exits on Python fatal error" do
       inp = start_link_supervised!(SnexTest.NumpyInterpreter)
       Process.flag(:trap_exit, true)
@@ -66,7 +76,9 @@ defmodule SnexTest do
       {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
 
       assert {_, 0} = System.cmd("kill", ~w[-SIGTERM #{os_pid}])
-      assert_receive {:EXIT, ^inp, {:exit_status, 143}}
+
+      assert_receive {:EXIT, ^inp,
+                      %Snex.Error{code: :interpreter_exited, reason: {:exit_status, 143}}}
     end
   end
 

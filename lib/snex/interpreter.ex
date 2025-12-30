@@ -241,8 +241,8 @@ defmodule Snex.Interpreter do
     {:noreply, state}
   end
 
-  def handle_info({port, {:exit_status, status}}, %State{port: port} = state) do
-    {:stop, {:exit_status, status}, state}
+  def handle_info({port, {:exit_status, _status} = reason}, %State{port: port} = state) do
+    {:stop, Snex.Error.exception(code: :interpreter_exited, reason: reason), state}
   end
 
   def handle_info(message, %State{} = state) do
@@ -302,6 +302,9 @@ defmodule Snex.Interpreter do
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
         :ok = decode_reply(response, port, self())
+
+      {^port, {:exit_status, _status} = reason} ->
+        {:error, Snex.Error.exception(code: :interpreter_exited, reason: reason)}
     after
       init_script_timeout ->
         {:error, Snex.Error.exception(code: :init_script_timeout)}

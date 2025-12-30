@@ -68,6 +68,10 @@
   This could happen because GC signals were processed immediately, while `Snex.pyeval` tasks are put onto a task queue.
   The race is addressed by treating GC signals as another kind of task, getting rid of the special treatment, and making sure they get processed after a `Snex.pyeval` that happened before.
 
+- **Fail fast on port exit**
+
+  Handle port exits if they happen before we try to run `:init_script`, instead of timing out waiting on `:init_script` result.
+
 ### Changes
 
 - **Document `Snex.Env` garbage collection behavior in multi-node scenarios**
