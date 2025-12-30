@@ -147,17 +147,11 @@ def on_task_done(
     except MemoryError as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
-            code="python_runtime_error",
+            code="python_memory_error",
             reason=str(e),
             traceback=traceback.format_exception(e),
         )
         transport.write_response(writer, req_id, result)
-        print(  # noqa: T201
-            "Exiting due to a MemoryError 1",
-            file=sys.stderr,
-            end="\r\n",
-        )
-        raise
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -210,17 +204,11 @@ async def run_loop() -> None:
         except MemoryError as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
-                code="python_runtime_error",
+                code="python_memory_error",
                 reason=str(e),
                 traceback=traceback.format_exception(e),
             )
             transport.write_response(writer, req_id, result)
-            print(  # noqa: T201
-                "Exiting due to a MemoryError 2",
-                file=sys.stderr,
-                end="\r\n",
-            )
-            raise
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
