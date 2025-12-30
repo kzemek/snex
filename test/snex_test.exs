@@ -3,7 +3,14 @@ defmodule SnexTest do
   use MarkdownDoctest
 
   markdown_doctest "README.md",
-    except: &String.contains?(&1, ["defmodule", "def deps", "def project", "def handle_call"])
+    except:
+      &String.contains?(&1, [
+        "defmodule",
+        "def deps",
+        "def project",
+        "def handle_call",
+        "a@localhost"
+      ])
 
   setup_all do
     inp = start_link_supervised!(SnexTest.NumpyInterpreter)

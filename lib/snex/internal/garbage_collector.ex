@@ -6,8 +6,6 @@ defmodule Snex.Internal.GarbageCollector do
 
   use GenServer
 
-  alias Snex.Internal.Commands
-
   require Logger
 
   @spec start_link(opts :: Keyword.t()) :: GenServer.on_start()
@@ -22,7 +20,7 @@ defmodule Snex.Internal.GarbageCollector do
 
   @impl GenServer
   def handle_info(%Snex.Env{} = env, state) do
-    Snex.Interpreter.command_noreply(env.interpreter, env.port, %Commands.GC{env: env})
+    :ok = Snex.destroy_env(env)
     {:noreply, state}
   end
 end

@@ -163,6 +163,24 @@ defmodule Snex do
     do: env.interpreter
 
   @doc """
+  Destroys an environment created with `Snex.make_env/3`.
+
+  This function is idempotent - it can be called multiple times on the same environment. It can also
+  be called from any node.
+
+  If the environment was created on the current node, its automatic garbage collection will
+  be disabled with `Snex.Env.disable_gc/1`. Otherwise (if `Snex.Env.disable_gc/1` was not called
+  beforehand), garbage collection will still be attempted, resulting in extraneous (but harmless)
+  communication with Python interpreter.
+  """
+  @spec destroy_env(Snex.Env.t()) :: :ok
+  def destroy_env(%Snex.Env{} = env) do
+    :ok = Snex.Interpreter.command_noreply(env.interpreter, env.port, %Commands.GC{env: env})
+    if env.ref != nil and node(env.ref) == node(), do: Snex.Env.disable_gc(env)
+    :ok
+  end
+
+  @doc """
   Shorthand for `Snex.pyeval/4`:
 
       # when given a `code` string:

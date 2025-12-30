@@ -13,6 +13,15 @@
   The timeout waits for the init script to finish, otherwise errors with `%Snex.Error{code: :init_script_timeout}`.
   It's set to 60 seconds by default.
 
+- **Add `Snex.destroy_env/1`**
+
+  `Snex.destroy_env/1` explicitly cleans up the referenced Python environment.
+
+- **Add `Snex.Env.disable_gc/1` to opt out of automatic `Snex.Env` lifetime management**
+
+  `Snex.Env.disable_gc/1` can be called on the node that created the environment.
+  Once called, the Python-side environment will only be destroyed on explicit `Snex.destroy_env/1` or on interpreter shutdown.
+
 - **Add `Snex.get_interpreter/1` function to get the interpreter for a `Snex.Env`**
 
 - **Infer interpreter if `Snex.make_env` is created `:from` existing environments**

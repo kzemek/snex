@@ -208,30 +208,24 @@ The downside is that an issue with Python or the initialization code will cause 
 `Snex.Env` garbage collection can only track usage within the node it was created on.
 If you send a `%Snex.Env{}` value to another node `b@localhost`, and drop any references to the value on the original node `a@localhost`, the garbage collector may clean up the environment even though it's used on `b`.
 
-To avoid that, you can immediately call `Snex.make_env(from: node_a_env)` on `b@localhost`, making sure to keep the reference on `a@localhost` at least until the copy is finished.
-Note that the BEAM VM can clean up variables as soon as just after their last use!
+In general, it's best to use `Snex.Env` instances created on the same node as their interpreter - this simplifies reasoning about cleanup, especially with node disconnections and shutdowns. Agents are a great way to share `Snex.Env` between nodes without giving up garbage collection:
 
 ```elixir
 # a@localhost
-def pass_env(interpreter) do
-  {:ok, local_env} = Snex.make_env(interpreter)
-  :ok = GenServer.call({:my_genserver, :"b@localhost"}, {:snex_env, local_env})
-  # Access `local_env` after GenServer.call() to make sure BEAM doesn't
-  # garbage-collect it before this point
-  local_env.__struct__
-  :ok
-end
+{:ok, interpreter} = Snex.Interpreter.start_link()
 
-# b@localhost
-@impl GenServer
-def handle_call({:snex_env, remote_env}, _from, state) do
-  {:ok, env} = Snex.make_env(from: remote_env)
-  # We can safely use the new `env` without worrying about it being garbage collected
-  {:reply, :ok, Map.put(state, :env, env)}
-end
+{:ok, env_agent} = Agent.start_link(fn ->
+  {:ok, env} = Snex.make_env(interpreter, %{"hello" => "hello from a@localhost!"})
+  env
+end)
+
+:erpc.call(:"b@localhost", fn ->
+  remote_env = Agent.get(env_agent, & &1)
+  {:ok, "hello from a@localhost!"} = Snex.pyeval(remote_env, returning: "hello")
+end)
 ```
 
-Alternatively, you can make sure to keep the original environment around by saving it in a long-lived process state, storing it in a global ETS, putting it in an `Agent`, etc.
+Alternatively, you can opt into manual management of `Snex.Env` lifetime by calling `Snex.Env.disable_gc/1` on the original node, and later destroying the env by calling `Snex.destroy_env/1` on any node.
 
 ### Serialization
 

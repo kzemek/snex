@@ -1,4 +1,4 @@
-CFLAGS ?= -g -O3
+CFLAGS ?= -g -O3 -std=c11 -Wall -Wpedantic -Wextra
 CFLAGS += -Wall -Wno-format-truncation
 
 CFLAGS += -I"$(ERTS_INCLUDE_DIR)"

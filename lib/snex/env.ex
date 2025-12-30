@@ -7,6 +7,9 @@ defmodule Snex.Env do
   Instead, you would use the `Snex.make_env/3` to create environments, `Snex.pyeval/4`
   to use them, and `Snex.get_interpreter/1` to get the interpreter for an environment.
 
+  The only exception is `Snex.Env.disable_gc/1`, which can be called to opt into manual management
+  of the environment lifecycle.
+
   See `m:Snex#module-environments` module documentation for more details.
   """
   alias Snex.Internal.EnvReferenceNif
@@ -29,6 +32,26 @@ defmodule Snex.Env do
     %__MODULE__{env | ref: EnvReferenceNif.make_ref(env)}
   end
 
+  @doc """
+  Disables automatic garbage collection for the given environment.
+
+  This function can only be called on the node that created the environment.
+  It can be called multiple times on the same environment.
+
+  Once garbage collection is disabled, the environment can only be cleaned up by calling
+  `Snex.destroy_env/1`, or by stopping the interpreter altogether.
+  """
+  @spec disable_gc(t()) :: t()
+  def disable_gc(%__MODULE__{ref: nil} = env),
+    do: env
+
+  def disable_gc(%__MODULE__{} = env) do
+    if node(env.ref) != node(),
+      do: raise(ArgumentError, "Cannot disable garbage collection for a remote environment")
+
+    %__MODULE__{env | ref: EnvReferenceNif.disable_gc(env.ref)}
+  end
+
   @doc false
   # This weird function makes sure the envs are not garbage collected before we're done using them.
   # to the interpreter. BEAM turns out to be very aggressive about garbage collection in that
@@ -42,7 +65,7 @@ end
 defmodule Snex.Internal.EnvReferenceNif do
   @moduledoc false
   @on_load :load_nif
-  @nifs [make_ref: 1]
+  @nifs [make_ref: 1, disable_gc: 1]
 
   defp load_nif do
     :code.priv_dir(:snex)
@@ -51,9 +74,14 @@ defmodule Snex.Internal.EnvReferenceNif do
   end
 
   @doc """
-  Creates a NIF reference that will send a `<<id::binary, "gc">> message to the
-  port when garbage collected.
+  Creates a NIF reference that will send the env to `Snex.Internal.GarbageCollector` when destroyed.
   """
   @spec make_ref(Snex.Env.t()) :: :erlang.nif_resource()
   def make_ref(_env), do: :erlang.nif_error(:not_loaded)
+
+  @doc """
+  Disables automatic garbage collection for the given reference.
+  """
+  @spec disable_gc(:erlang.nif_resource()) :: nil
+  def disable_gc(_reference), do: :erlang.nif_error(:not_loaded)
 end

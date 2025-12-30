@@ -3,23 +3,32 @@ defmodule Snex.GCTest do
 
   import ExUnit.CaptureLog
 
-  setup do
+  setup ctx do
     interpreter = start_supervised!(SnexTest.NumpyInterpreter)
     {:ok, env} = Snex.make_env(interpreter)
 
-    %{interpreter: interpreter, env: env}
+    attrs =
+      if ctx[:garbage_collector_mitm?] do
+        garbage_collector = Process.whereis(Snex.Internal.GarbageCollector)
+        Process.unregister(Snex.Internal.GarbageCollector)
+        Process.register(self(), Snex.Internal.GarbageCollector)
+
+        on_exit(fn ->
+          Process.register(garbage_collector, Snex.Internal.GarbageCollector)
+        end)
+
+        %{garbage_collector: garbage_collector}
+      else
+        %{}
+      end
+
+    Map.merge(%{interpreter: interpreter, env: env}, attrs)
   end
 
   describe "Snex.Env garbage collection" do
-    test "is garbage collected when the last reference to the environment is dropped", %{env: env} do
-      garbage_collector = Process.whereis(Snex.Internal.GarbageCollector)
-      Process.unregister(Snex.Internal.GarbageCollector)
-      Process.register(self(), Snex.Internal.GarbageCollector)
-
-      on_exit(fn ->
-        Process.register(garbage_collector, Snex.Internal.GarbageCollector)
-      end)
-
+    @tag garbage_collector_mitm?: true
+    test "is garbage collected when the last reference to the environment is dropped",
+         %{env: env, garbage_collector: garbage_collector} do
       %{id: env_id} = env = %{env | ref: nil}
       :erlang.garbage_collect()
 
@@ -69,6 +78,38 @@ defmodule Snex.GCTest do
         end)
 
       assert log == ""
+    end
+  end
+
+  describe "Snex.destroy_env/1" do
+    test "destroys the environment and subsequent pyeval calls return env_not_found", %{env: env} do
+      assert {:ok, 1} = Snex.pyeval(env, returning: "1")
+
+      assert :ok = Snex.destroy_env(env)
+
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+    end
+
+    test "is idempotent - can be called multiple times on the same environment", %{env: env} do
+      assert :ok = Snex.destroy_env(env)
+      assert :ok = Snex.destroy_env(env)
+      assert :ok = Snex.destroy_env(env)
+
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+    end
+
+    @tag garbage_collector_mitm?: true
+    test "prevents automatic GC from sending duplicate destroy commands", %{env: env} do
+      # Manually destroy the env - this should disable automatic GC for local envs
+      assert :ok = Snex.destroy_env(env)
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+
+      # Drop the ref by setting it to nil and trigger GC
+      %{id: env_id} = _env = %{env | ref: nil}
+      :erlang.garbage_collect()
+
+      # GC should NOT send a message since destroy_env disabled automatic GC
+      refute_receive %Snex.Env{id: ^env_id}, 100
     end
   end
 
