@@ -39,3 +39,8 @@ $(PRIV_DIR):
 .PHONY: clean
 clean:
 	rm -f $(LIBS)
+
+.PHONY: linux-shell
+linux-shell:
+	docker compose up -d
+	docker exec -it $$COMPOSE_PROJECT_NAME-linux_shell-1 bash

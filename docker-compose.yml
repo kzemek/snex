@@ -1,0 +1,8 @@
+# docker-compose.yml
+services:
+  linux_shell:
+    image: hexpm/elixir:1.19.3-erlang-28.3-ubuntu-focal-20250404
+    command: sleep infinity
+    volumes:
+      - ${HOST_PWD}:${HOST_PWD}
+    working_dir: ${HOST_PWD}
