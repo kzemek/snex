@@ -141,4 +141,14 @@ defmodule SnexTest do
     @spec wrap_with_env(String.t(), [String.t()]) :: {String.t(), [String.t()]}
     def wrap_with_env(python, args), do: {"/usr/bin/env", ["TESTVAR=42", python | args]}
   end
+
+  describe "Snex.Interpreter.os_pid/1" do
+    test "returns the OS PID of the interpreter" do
+      {:ok, inp} = Snex.Interpreter.start_link()
+      os_pid = Snex.Interpreter.os_pid(inp)
+
+      assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
+      assert cmd =~ "python"
+    end
+  end
 end

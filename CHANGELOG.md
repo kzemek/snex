@@ -54,6 +54,8 @@
   Allows customizing how the Python process is spawned by wrapping the executable path and arguments.
   This can be used e.g. to run Python inside a Docker container, see `docker_example_test.exs`.
 
+- **Add `Snex.Interpreter.os_pid/1`**
+
 ## Fixes
 
 - **Fix `Snex.Env` usage in multi-node scenario**

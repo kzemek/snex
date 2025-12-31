@@ -104,6 +104,13 @@ defmodule Snex.Interpreter do
     do: GenServer.call(interpreter, :get_port)
 
   @doc """
+  Returns the OS PID of the Python interpreter.
+  """
+  @spec os_pid(server()) :: non_neg_integer()
+  def os_pid(interpreter),
+    do: GenServer.call(interpreter, :os_pid)
+
+  @doc """
   Starts a new Python interpreter.
 
   The interpreter can be used by functions in the `Snex` module.
@@ -190,6 +197,13 @@ defmodule Snex.Interpreter do
           {:reply, port(), state()}
   def handle_call(:get_port, _from, %State{} = state),
     do: {:reply, state.port, state}
+
+  @spec handle_call(:os_pid, GenServer.from(), state()) ::
+          {:reply, non_neg_integer(), state()}
+  def handle_call(:os_pid, _from, %State{port: port} = state) do
+    {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
+    {:reply, os_pid, state}
+  end
 
   @spec handle_call({:expect_reply, request_id()}, GenServer.from(), state()) ::
           {:noreply, state()}
