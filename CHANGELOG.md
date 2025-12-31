@@ -23,38 +23,33 @@
 
 ### Features
 
-- **Add `:label` option to `Snex.Interpreter`**
+- **New `Snex.Interpreter` (and custom interpreters) options**
 
-  The option labels the interpreter process through `:proc_lib.set_label/1`.
-  Most usefully, the label is automatically set to `__MODULE__` when calling `use Snex.Interpreter`.
-  This way, `Snex.Interpreter` processes become easily traceable to the custom interpreter that spawned them.
+  - `:label` - labels the interpreter process through `:proc_lib.set_label/1`.
+    Most usefully, the label is automatically set to `__MODULE__` when calling `use Snex.Interpreter`.
+    This way, `Snex.Interpreter` processes become easily traceable to the custom interpreter that spawned them.
 
-- **Add `:init_script_timeout` option to `Snex.Interpreter`**
+  - `:init_script_timeout` - if `:init_script` doesn't finish under the timeout, the interpreter process stops with `%Snex.Error{code: :init_script_timeout}`.
+    60 seconds default.
 
-  The timeout waits for the init script to finish, otherwise errors with `%Snex.Error{code: :init_script_timeout}`.
-  It's set to 60 seconds by default.
+  - `:wrap_exec` - customizes how the Python process is spawned by wrapping the executable path and arguments.
+    This can be used e.g. to run Python inside a Docker container, see `docker_example_test.exs`.
 
-- **Add `Snex.destroy_env/1`**
+- **New functions**
 
-  `Snex.destroy_env/1` explicitly cleans up the referenced Python environment.
+  - `Snex.destroy_env/1` - explicitly cleans up the referenced Python environment.
 
-- **Add `Snex.Env.disable_gc/1` to opt out of automatic `Snex.Env` lifetime management**
+  - `Snex.Env.disable_gc/1` - opts out of automatic lifetime management for a `%Snex.Env{}`.
+    It can only be called on the node that created the environment.
+    Once called, the Python-side environment will only be destroyed on explicit `Snex.destroy_env/1` or on interpreter shutdown.
 
-  `Snex.Env.disable_gc/1` can be called on the node that created the environment.
-  Once called, the Python-side environment will only be destroyed on explicit `Snex.destroy_env/1` or on interpreter shutdown.
+  - `Snex.Env.interpreter/1` - gets the interpreter process associated with a `%Snex.Env{}`.
 
-- **Add `Snex.Env.interpreter/1` function to get the interpreter for a `Snex.Env`**
+  - `Snex.Interpreter.os_pid/1` - gets the OS PID of the Python interpreter process.
 
 - **Infer interpreter if `Snex.make_env` is created `:from` existing environments**
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
-
-- **Add `:wrap_exec` option for `Snex.Interpreter`**
-
-  Allows customizing how the Python process is spawned by wrapping the executable path and arguments.
-  This can be used e.g. to run Python inside a Docker container, see `docker_example_test.exs`.
-
-- **Add `Snex.Interpreter.os_pid/1`**
 
 ## Fixes
 
@@ -76,13 +71,13 @@
 
 ### Changes
 
-- **Document `Snex.Env` garbage collection behavior in multi-node scenarios**
-
 - **Move serde work to Snex callers**
 
   Serialization and deserialization on Elixir side is now done outside of `Snex.Interpreter` process.
   The outside callers send data directly to the port (possibly with `:erpc` if remote).
   `Snex.Interpreter` is now almost exclusively responsible for routing responses from Python.
+
+- **Document `Snex.Env` garbage collection behavior in multi-node scenarios**
 
 - **Un-opaque the type of `Snex.Env{}`**
 
