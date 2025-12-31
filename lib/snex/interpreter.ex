@@ -42,10 +42,11 @@ defmodule Snex.Interpreter do
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, pending: %{}]
+  defstruct [:port, :max_rss_bytes, pending: %{}]
 
   @typep state :: %State{
            port: port(),
+           max_rss_bytes: non_neg_integer() | nil,
            pending: %{optional(request_id()) => %{client: GenServer.from()}}
          }
 
@@ -64,6 +65,7 @@ defmodule Snex.Interpreter do
           | {:init_script_timeout, timeout()}
           | {:sync_start?, boolean()}
           | {:label, term()}
+          | {:max_rss_bytes, non_neg_integer()}
           | GenServer.option()
 
   @doc false
@@ -77,6 +79,9 @@ defmodule Snex.Interpreter do
     run_command(interpreter, port, encoded_command)
 
     case :gen_server.receive_response(request_id, timeout) do
+      {:reply, {:error, %Snex.Error{}} = error} ->
+        error
+
       {:reply, reply} ->
         Snex.Env.touch(envs)
         decode_reply(reply, port, interpreter)
@@ -154,6 +159,11 @@ defmodule Snex.Interpreter do
       through `:proc_lib.set_label/1`. It will also be present in telemetry event metadata under
       `:interpreter_label` key.
 
+    - `:max_rss_bytes` - Maximum resident set size (RSS) in bytes allowed for the Python process.
+      After each command completes, the interpreter checks the Python process memory usage.
+      If it exceeds this limit, the GenServer exits with reason `{:shutdown, :max_rss_bytes}`.
+      This is useful for preventing runaway memory consumption. Default: `nil` (no limit).
+
     - any other options will be passed to `GenServer.start_link/3`.
   """
   @spec start_link([option()]) :: GenServer.on_start()
@@ -167,7 +177,8 @@ defmodule Snex.Interpreter do
         :init_script,
         :init_script_timeout,
         :sync_start?,
-        :label
+        :label,
+        :max_rss_bytes
       ])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
@@ -178,22 +189,23 @@ defmodule Snex.Interpreter do
           {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
     {label, opts} = Keyword.pop(opts, :label)
+    {max_rss_bytes, opts} = Keyword.pop(opts, :max_rss_bytes)
 
     if label != nil and function_exported?(:proc_lib, :set_label, 1),
       do: :proc_lib.set_label(label)
 
     with true <- !!Keyword.get(opts, :sync_start?, true),
          {:ok, port} <- init_python_port(opts) do
-      {:ok, %State{port: port}}
+      {:ok, %State{port: port, max_rss_bytes: max_rss_bytes}}
     else
-      false -> {:ok, %State{}, {:continue, {:init, opts}}}
+      false -> {:ok, %State{max_rss_bytes: max_rss_bytes}, {:continue, {:init, opts}}}
       {:error, reason} -> {:stop, reason}
     end
   end
 
   @impl GenServer
   @spec handle_continue({:init, [option()]}, state()) ::
-          {:noreply, state()}
+          {:noreply, state()} | {:stop, any(), state()}
   def handle_continue({:init, opts}, %State{} = state) do
     case init_python_port(opts) do
       {:ok, port} -> {:noreply, %State{state | port: port}}
@@ -223,7 +235,9 @@ defmodule Snex.Interpreter do
 
   @impl GenServer
   @spec handle_info(any(), state()) ::
-          {:noreply, state()} | {:stop, {:exit_status, non_neg_integer()}, state()}
+          {:noreply, state()}
+          | {:stop, {:exit_status, non_neg_integer()}, state()}
+          | {:stop, {:shutdown, :max_rss_bytes}, state()}
   def handle_info(
         {port, {:data, <<id::binary-size(16), @response, data::binary>>}},
         %State{port: port} = state
@@ -246,7 +260,14 @@ defmodule Snex.Interpreter do
         end
     end
 
-    {:noreply, %State{state | pending: pending}}
+    state = %State{state | pending: pending}
+
+    if rss_exceeded?(state) do
+      reply_to_all_pending(state, {:error, Snex.Error.exception(code: :max_rss_bytes)})
+      {:stop, {:shutdown, :max_rss_bytes}, %State{state | pending: %{}}}
+    else
+      {:noreply, state}
+    end
   end
 
   def handle_info(
@@ -400,5 +421,33 @@ defmodule Snex.Interpreter do
   defp encode_command(command) do
     id = generate_request_id()
     {id, [id, @request, Snex.Serde.encode_to_iodata!(command)]}
+  end
+
+  defp rss_exceeded?(%State{max_rss_bytes: nil}), do: false
+
+  defp rss_exceeded?(%State{port: port, max_rss_bytes: max_rss_bytes}) do
+    case get_port_rss_bytes(port) do
+      {:ok, rss_bytes} -> rss_bytes > max_rss_bytes
+      {:error, _reason} -> false
+    end
+  end
+
+  defp reply_to_all_pending(%State{pending: pending}, reply) do
+    Enum.each(pending, fn {_id, %{client: client}} ->
+      GenServer.reply(client, reply)
+    end)
+  end
+
+  defp get_port_rss_bytes(port) do
+    case Port.info(port, :os_pid) do
+      {:os_pid, os_pid} ->
+        case Internal.System.get_rss_via_ps(os_pid) do
+          {:ok, rss_bytes} -> {:ok, rss_bytes}
+          {:error, :ps_failed} -> Internal.System.get_rss_via_proc(os_pid)
+        end
+
+      nil ->
+        {:error, :port_closed}
+    end
   end
 end

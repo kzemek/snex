@@ -30,6 +30,9 @@ defmodule Snex.Error do
   @typedoc "The error code indicating the interpreter exited with a non-zero status."
   @type interpreter_exited :: :interpreter_exited
 
+  @typedoc "The error code indicating the interpreter exceeded maximum RSS memory."
+  @type max_rss_bytes :: :max_rss_bytes
+
   @typedoc """
   Error codes for all errors.
   """
@@ -41,6 +44,7 @@ defmodule Snex.Error do
           | init_script_timeout()
           | response_timeout()
           | call_failed()
+          | max_rss_bytes()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.

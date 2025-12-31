@@ -176,4 +176,94 @@ defmodule SnexTest do
       assert cmd =~ "python"
     end
   end
+
+  describe "max_rss_bytes" do
+    @tag capture_log: true
+    test "interpreter shuts down when memory exceeds limit" do
+      Process.flag(:trap_exit, true)
+
+      # Start interpreter with a very low memory limit (1 byte - will trigger on first command)
+      {:ok, inp} = SnexTest.NumpyInterpreter.start_link(max_rss_bytes: 1)
+
+      # make_env succeeds (command completes) but triggers memory check which exceeds limit
+      {:ok, _env} = Snex.make_env(inp)
+
+      # Interpreter should shut down immediately after
+      assert_receive {:EXIT, ^inp, {:shutdown, :max_rss_bytes}}, 1000
+    end
+
+    @tag capture_log: true
+    test "pending requests receive error when memory limit exceeded" do
+      Process.flag(:trap_exit, true)
+
+      # Start interpreter with a very low memory limit
+      {:ok, inp} = SnexTest.NumpyInterpreter.start_link(max_rss_bytes: 1)
+
+      test_pid = self()
+
+      # Spawn tasks that will try to run commands concurrently.
+      # Both tasks signal when they're about to call the GenServer.
+
+      # Task 1: make_env - this will succeed but trigger memory check
+      task1 =
+        Task.async(fn ->
+          send(test_pid, :task1_starting)
+          Snex.make_env(inp)
+        end)
+
+      # Task 2: another make_env - this should be pending when task1 triggers shutdown
+      task2 =
+        Task.async(fn ->
+          # Wait for task1 to start, then immediately send our request too
+          receive do
+            :task2_go -> :ok
+          end
+
+          send(test_pid, :task2_starting)
+          Snex.make_env(inp)
+        end)
+
+      # Wait for task1 to start its call
+      assert_receive :task1_starting, 1000
+
+      # Signal task2 to start immediately
+      send(task2.pid, :task2_go)
+
+      # Wait for task2 to also start
+      assert_receive :task2_starting, 1000
+
+      # Task 1 should succeed (the command completes before shutdown)
+      assert {:ok, _env} = Task.await(task1, 5000)
+
+      # Task 2 should receive the max_rss_bytes error
+      assert {:error, %Snex.Error{code: :max_rss_bytes}} = Task.await(task2, 5000)
+
+      # Interpreter should exit
+      assert_receive {:EXIT, ^inp, {:shutdown, :max_rss_bytes}}, 1000
+    end
+
+    test "interpreter runs normally when max_rss_bytes is nil" do
+      # Use a unique name to avoid conflicts with setup's interpreter
+      {:ok, inp} = SnexTest.NumpyInterpreter.start_link(max_rss_bytes: nil, name: :test_nil_rss)
+      {:ok, env} = Snex.make_env(inp)
+
+      assert {:ok, 42} = Snex.pyeval(env, "x = 42", returning: "x")
+      assert {:ok, 84} = Snex.pyeval(env, "y = x * 2", returning: "y")
+
+      GenServer.stop(inp)
+    end
+
+    test "interpreter runs normally when memory is under limit" do
+      # 1 GB limit should be plenty. Use a unique name to avoid conflicts.
+      {:ok, inp} =
+        SnexTest.NumpyInterpreter.start_link(max_rss_bytes: 1_000_000_000, name: :test_high_rss)
+
+      {:ok, env} = Snex.make_env(inp)
+
+      assert {:ok, 42} = Snex.pyeval(env, "x = 42", returning: "x")
+      assert {:ok, 84} = Snex.pyeval(env, "y = x * 2", returning: "y")
+
+      GenServer.stop(inp)
+    end
+  end
 end
