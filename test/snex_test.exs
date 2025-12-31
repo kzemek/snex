@@ -150,5 +150,12 @@ defmodule SnexTest do
       assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
       assert cmd =~ "python"
     end
+
+    test "returns the OS PID of the custom interpreter", %{inp: inp} do
+      os_pid = Snex.Interpreter.os_pid(inp)
+
+      assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
+      assert cmd =~ "python"
+    end
   end
 end

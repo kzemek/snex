@@ -46,6 +46,7 @@
   - `Snex.Env.interpreter/1` - gets the interpreter process associated with a `%Snex.Env{}`.
 
   - `Snex.Interpreter.os_pid/1` - gets the OS PID of the Python interpreter process.
+    Also available in custom interpreter modules.
 
 - **Infer interpreter if `Snex.make_env` is created `:from` existing environments**
 
