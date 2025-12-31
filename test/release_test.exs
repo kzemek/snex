@@ -1,25 +1,33 @@
 defmodule SnexTest.ReleaseTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+
   # credo:disable-for-this-file Credo.Check.Readability.NestedFunctionCalls
 
   setup_all do
     tmpdir = Path.join(System.tmp_dir!(), "#{__MODULE__}-#{System.pid()}")
-    File.mkdir_p!(tmpdir)
-    on_exit(fn -> File.rm_rf!(tmpdir) end)
 
-    IO.puts("\n=================== START CREATE TEST RELEASE ===================")
+    assert {:ok, _output} =
+             with_io(fn ->
+               try do
+                 File.mkdir_p!(tmpdir)
+                 on_exit(fn -> File.rm_rf!(tmpdir) end)
 
-    make_project!(tmpdir)
-    assert {_, 0} = run(~w"mix deps.get", cd: tmpdir, into: IO.stream())
-    assert {_, 0} = run(~w"mix release", cd: tmpdir, into: IO.stream())
+                 make_project!(tmpdir)
+                 assert {_, 0} = run(~w"mix deps.get", cd: tmpdir, into: IO.stream())
+                 assert {_, 0} = run(~w"mix release", cd: tmpdir, into: IO.stream())
 
-    File.cp_r!(
-      Path.join([tmpdir, "_build", "dev", "rel", "default_release"]),
-      Path.join(tmpdir, "default_release")
-    )
+                 File.cp_r!(
+                   Path.join([tmpdir, "_build", "dev", "rel", "default_release"]),
+                   Path.join(tmpdir, "default_release")
+                 )
 
-    IO.puts("==================== END CREATE TEST RELEASE ====================\n")
+                 :ok
+               rescue
+                 e -> {:error, e}
+               end
+             end)
 
     %{release_dir: Path.join(tmpdir, "default_release")}
   end
