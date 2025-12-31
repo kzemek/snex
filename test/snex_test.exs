@@ -80,6 +80,34 @@ defmodule SnexTest do
       assert_receive {:EXIT, ^inp,
                       %Snex.Error{code: :interpreter_exited, reason: {:exit_status, 143}}}
     end
+
+    @tag capture_log: true
+    test "interpreter shutdown stops pending requests" do
+      {:ok, inp} = Snex.Interpreter.start_link()
+      Process.flag(:trap_exit, true)
+
+      self = self()
+
+      task =
+        Task.async(fn ->
+          {:ok, env} = Snex.make_env(inp)
+
+          Snex.pyeval(
+            env,
+            """
+            import asyncio
+            snex.send(parent, snex.Atom("running"))
+            await asyncio.sleep(10)
+            """,
+            %{"parent" => self}
+          )
+        end)
+
+      assert_receive :running
+      Snex.Interpreter.stop(inp, :any_reason)
+
+      assert {:error, %Snex.Error{code: :call_failed, reason: :any_reason}} = Task.await(task)
+    end
   end
 
   describe "sync_start_timeout" do

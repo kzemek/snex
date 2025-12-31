@@ -24,8 +24,8 @@ defmodule Snex.Error do
   @typedoc "The error code indicating the response was not received within the timeout."
   @type response_timeout :: :response_timeout
 
-  @typedoc "The error code indicating communication with the interpreter failed."
-  @type interpreter_communication_failure :: :interpreter_communication_failure
+  @typedoc "The error code indicating communication with the interpreter GenServer failed."
+  @type call_failed :: :call_failed
 
   @typedoc "The error code indicating the interpreter exited with a non-zero status."
   @type interpreter_exited :: :interpreter_exited
@@ -40,7 +40,7 @@ defmodule Snex.Error do
           | env_key_not_found()
           | init_script_timeout()
           | response_timeout()
-          | interpreter_communication_failure()
+          | call_failed()
 
   @typedoc """
   The type of `#{inspect(__MODULE__)}`.

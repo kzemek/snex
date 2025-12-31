@@ -57,8 +57,8 @@ defmodule Snex.GCTest do
         with_log(fn ->
           Process.exit(interpreter, :shutdown)
 
-          assert {:error, %Snex.Error{code: :interpreter_communication_failure, reason: :noproc}} =
-                   wait_until_error_code(env, :interpreter_communication_failure)
+          assert {:error, %Snex.Error{code: :call_failed, reason: :noproc}} =
+                   wait_until_error_code(env, :call_failed)
 
           %{id: env_id} = env
           :erlang.garbage_collect()

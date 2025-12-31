@@ -85,6 +85,10 @@
   `%Snex.Env{}` is directly referenced in the docs all over, so it makes sense to publicly type it with `Snex.Env.t()`.
   This replaces the previous opaque `Snex.env()` type.
 
+- **Tighten down interpreter shutdown story**
+
+  Make sure that the code shuts down cleanly on `GenServer.stop/2`, and spec out (in tests) pending caller behavior.
+
 ## 0.2.0
 
 ### Features

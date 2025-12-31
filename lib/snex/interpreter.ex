@@ -85,7 +85,7 @@ defmodule Snex.Interpreter do
         {:error, Snex.Error.exception(code: :response_timeout)}
 
       {:error, {reason, _server_ref}} ->
-        {:error, Snex.Error.exception(code: :interpreter_communication_failure, reason: reason)}
+        {:error, Snex.Error.exception(code: :call_failed, reason: reason)}
     end
   end
 

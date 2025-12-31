@@ -150,6 +150,8 @@ def on_task_done(
         result = task.result()
         if result is not None:
             transport.write_response(writer, req_id, result)
+    except asyncio.CancelledError:
+        pass
     except Exception as e:  # noqa: BLE001
         result = ErrorResponse(
             status="error",
@@ -196,6 +198,8 @@ async def run_loop() -> None:
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),
             )
+        except asyncio.CancelledError:
+            break
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
                 status="error",
