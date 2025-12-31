@@ -111,6 +111,15 @@ defmodule Snex.Interpreter do
     do: GenServer.call(interpreter, :os_pid)
 
   @doc """
+  Stops the interpreter process with reason `reason`.
+
+  Pending callers will return `{:error, %Snex.Error{code: :call_failed, reason: reason}}`.
+  """
+  @spec stop(server(), term(), timeout()) :: :ok
+  def stop(interpreter, reason \\ :normal, timeout \\ :infinity),
+    do: GenServer.stop(interpreter, reason, timeout)
+
+  @doc """
   Starts a new Python interpreter.
 
   The interpreter can be used by functions in the `Snex` module.

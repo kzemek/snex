@@ -48,6 +48,9 @@
   - `Snex.Interpreter.os_pid/1` - gets the OS PID of the Python interpreter process.
     Also available in custom interpreter modules.
 
+  - `Snex.Interpreter.stop/1,2,3` - stops the interpreter process.
+    Pending callers will return `{:error, %Snex.Error{code: :call_failed, reason: reason}}`
+
 - **Infer interpreter if `Snex.make_env` is created `:from` existing environments**
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
@@ -84,10 +87,6 @@
 
   `%Snex.Env{}` is directly referenced in the docs all over, so it makes sense to publicly type it with `Snex.Env.t()`.
   This replaces the previous opaque `Snex.env()` type.
-
-- **Tighten down interpreter shutdown story**
-
-  Make sure that the code shuts down cleanly on `GenServer.stop/2`, and spec out (in tests) pending caller behavior.
 
 ## 0.2.0
 

@@ -64,6 +64,10 @@ defmodule Snex.Internal.CustomInterpreter do
 
       defdelegate os_pid(interpreter), to: Snex.Interpreter
 
+      defdelegate stop(interpreter), to: Snex.Interpreter
+      defdelegate stop(interpreter, reason), to: Snex.Interpreter
+      defdelegate stop(interpreter, reason, timeout), to: Snex.Interpreter
+
       defoverridable __mix_recompile__?: 0, start_link: 1, child_spec: 1
     end
   end
