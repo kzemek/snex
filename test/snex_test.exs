@@ -19,6 +19,8 @@ defmodule SnexTest do
   end
 
   setup ctx do
+    if ctx[:trap_exit?], do: Process.flag(:trap_exit, true)
+
     {:ok, env} = Snex.make_env(ctx.inp)
     %{env: env}
   end
@@ -57,7 +59,6 @@ defmodule SnexTest do
               }} = Snex.pyeval(env, "import datetime", returning: "datetime")
     end
 
-    @tag capture_log: true
     test "the interpreter exits if Port fails to start" do
       Process.flag(:trap_exit, true)
 
@@ -68,13 +69,11 @@ defmodule SnexTest do
     end
 
     @tag capture_log: true
+    @tag trap_exit?: true
     test "the interpreter exits on Python fatal error" do
-      inp = start_link_supervised!(SnexTest.NumpyInterpreter)
-      Process.flag(:trap_exit, true)
+      {:ok, inp} = SnexTest.NumpyInterpreter.start_link()
 
-      %{port: port} = :sys.get_state(inp)
-      {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
-
+      os_pid = SnexTest.NumpyInterpreter.os_pid(inp)
       assert {_, 0} = System.cmd("kill", ~w[-SIGTERM #{os_pid}])
 
       assert_receive {:EXIT, ^inp,
@@ -82,9 +81,9 @@ defmodule SnexTest do
     end
 
     @tag capture_log: true
+    @tag trap_exit?: true
     test "interpreter shutdown stops pending requests" do
       {:ok, inp} = Snex.Interpreter.start_link()
-      Process.flag(:trap_exit, true)
 
       self = self()
 
@@ -111,9 +110,8 @@ defmodule SnexTest do
   end
 
   describe "sync_start_timeout" do
+    @tag trap_exit?: true
     test "returns an error if sync_start? is true" do
-      Process.flag(:trap_exit, true)
-
       assert {:error, %Snex.Error{code: :init_script_timeout}} =
                Snex.Interpreter.start_link(
                  sync_start?: true,
@@ -125,10 +123,9 @@ defmodule SnexTest do
                )
     end
 
+    @tag trap_exit?: true
     @tag capture_log: true
     test "exits asynchronously if sync_start? is false" do
-      Process.flag(:trap_exit, true)
-
       assert {:ok, inp} =
                Snex.Interpreter.start_link(
                  sync_start?: false,
@@ -171,16 +168,9 @@ defmodule SnexTest do
   end
 
   describe "Snex.Interpreter.os_pid/1" do
-    test "returns the OS PID of the interpreter" do
-      {:ok, inp} = Snex.Interpreter.start_link()
-      os_pid = Snex.Interpreter.os_pid(inp)
-
-      assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
-      assert cmd =~ "python"
-    end
-
-    test "returns the OS PID of the custom interpreter", %{inp: inp} do
+    test "returns the OS PID of the interpreter", %{inp: inp} do
       os_pid = SnexTest.NumpyInterpreter.os_pid(inp)
+      assert ^os_pid = Snex.Interpreter.os_pid(inp)
 
       assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
       assert cmd =~ "python"

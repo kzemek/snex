@@ -1,25 +1,38 @@
 defmodule SnexTest.ReleaseTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+
   # credo:disable-for-this-file Credo.Check.Readability.NestedFunctionCalls
 
   setup_all do
     tmpdir = Path.join(System.tmp_dir!(), "#{__MODULE__}-#{System.pid()}")
-    File.mkdir_p!(tmpdir)
-    on_exit(fn -> File.rm_rf!(tmpdir) end)
 
-    IO.puts("\n=================== START CREATE TEST RELEASE ===================")
+    setup_result =
+      with_io(fn ->
+        try do
+          File.mkdir_p!(tmpdir)
+          on_exit(fn -> File.rm_rf!(tmpdir) end)
 
-    make_project!(tmpdir)
-    assert {_, 0} = run(~w"mix deps.get", cd: tmpdir, into: IO.stream())
-    assert {_, 0} = run(~w"mix release", cd: tmpdir, into: IO.stream())
+          make_project!(tmpdir)
+          assert {_, 0} = run(~w"mix deps.get", cd: tmpdir, into: IO.stream())
+          assert {_, 0} = run(~w"mix release", cd: tmpdir, into: IO.stream())
 
-    File.cp_r!(
-      Path.join([tmpdir, "_build", "dev", "rel", "default_release"]),
-      Path.join(tmpdir, "default_release")
-    )
+          File.cp_r!(
+            Path.join([tmpdir, "_build", "dev", "rel", "default_release"]),
+            Path.join(tmpdir, "default_release")
+          )
 
-    IO.puts("==================== END CREATE TEST RELEASE ====================\n")
+          :ok
+        rescue
+          e -> {:error, {e, __STACKTRACE__}}
+        end
+      end)
+
+    with {{:error, {e, stacktrace}}, output} <- setup_result do
+      IO.puts("\n" <> output <> "\n")
+      reraise e, stacktrace
+    end
 
     %{release_dir: Path.join(tmpdir, "default_release")}
   end
@@ -50,9 +63,9 @@ defmodule SnexTest.ReleaseTest do
     snex_python_path = Path.join(snex_path, "python")
     snex_projects_path = Path.join(snex_path, "projects")
 
-    File.write!(mix_exs_path, mix_exs())
+    File.write!(mix_exs_path, Macro.to_string(mix_exs_quoted()))
     File.mkdir_p!(Path.dirname(modules_ex_path))
-    File.write!(modules_ex_path, modules_ex())
+    File.write!(modules_ex_path, Macro.to_string(modules_ex_quoted()))
     File.ln_s!(Path.absname("deps"), Path.join(tmpdir, "deps"))
 
     # Seed python directory with what we have in test
@@ -76,48 +89,48 @@ defmodule SnexTest.ReleaseTest do
     System.cmd(arg0, args, [stderr_to_stdout: true, env: [{"MIX_ENV", "dev"}]] ++ opts)
   end
 
-  defp mix_exs do
-    """
-    defmodule RelocatableTest.MixProject do
-      use Mix.Project
+  defp mix_exs_quoted do
+    quote do
+      defmodule RelocatableTest.MixProject do
+        use Mix.Project
 
-      def project do
-        [
-          app: :relocatable_test,
-          version: "0.1.0",
-          elixir: "~> 1.18",
-          start_permanent: Mix.env() == :prod,
-          default_release: :default_release,
-          releases: [
-            default_release: [
-              steps: [:assemble, &Snex.Release.after_assemble/1]
-            ]
-          ],
-          deps: deps()
-        ]
-      end
+        def project do
+          [
+            app: :relocatable_test,
+            version: "0.1.0",
+            elixir: "~> 1.18",
+            start_permanent: Mix.env() == :prod,
+            default_release: :default_release,
+            releases: [
+              default_release: [
+                steps: [:assemble, &Snex.Release.after_assemble/1]
+              ]
+            ],
+            deps: deps()
+          ]
+        end
 
-      def application do
-        [
-          mod: {RelocatableTest, []},
-          extra_applications: [:logger]
-        ]
-      end
+        def application do
+          [
+            mod: {RelocatableTest, []},
+            extra_applications: [:logger]
+          ]
+        end
 
-      defp deps do
-        [
-          {:snex, path: #{inspect(Path.absname("."))}}
-        ]
+        defp deps do
+          [
+            {:snex, path: unquote(File.cwd!())}
+          ]
+        end
       end
     end
-    """
   end
 
-  defp modules_ex do
-    ~s'''
-    defmodule RelocatableTest.Interpreter do
-      use Snex.Interpreter,
-        pyproject_toml: """
+  defp modules_ex_quoted do
+    quote do
+      defmodule RelocatableTest.Interpreter do
+        use Snex.Interpreter,
+          pyproject_toml: """
           [project]
           name = "python-files"
           version = "0.1.0"
@@ -129,23 +142,35 @@ defmodule SnexTest.ReleaseTest do
               "numpy",
           ]
           """
-    end
+      end
 
-    defmodule RelocatableTest do
-      use Application
+      defmodule RelocatableTest do
+        use Application
 
-      def start(_type, _args) do
-        children = [{RelocatableTest.Interpreter, name: RelocatableTest.Interpreter}]
-        Supervisor.start_link(children, strategy: :one_for_one, name: RelocatableTest.Supervisor)
-        {:ok, env} = Snex.make_env(RelocatableTest.Interpreter)
-        {:ok, "[1 2 3]"} = Snex.pyeval(env, """
-          import dill
-          import numpy
-          x = dill.loads(dill.dumps(numpy.array([1, 2, 3])))
-          """, returning: "str(x)")
-        {:error, :relocatable_test_done}
+        def start(_type, _args) do
+          children = [{RelocatableTest.Interpreter, name: RelocatableTest.Interpreter}]
+
+          Supervisor.start_link(children,
+            strategy: :one_for_one,
+            name: RelocatableTest.Supervisor
+          )
+
+          {:ok, env} = Snex.make_env(RelocatableTest.Interpreter)
+
+          {:ok, "[1 2 3]"} =
+            Snex.pyeval(
+              env,
+              """
+              import dill
+              import numpy
+              x = dill.loads(dill.dumps(numpy.array([1, 2, 3])))
+              """,
+              returning: "str(x)"
+            )
+
+          {:error, :relocatable_test_done}
+        end
       end
     end
-    '''
   end
 end
