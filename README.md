@@ -57,14 +57,32 @@ end
   You don't need to have it installed - Snex will fetch it with `uv`.
 
 ```elixir
+# mix.exs
 def deps do
   [
     {:snex, "~> 0.2.0"}
   ]
 end
+
+# See Releases section in the README on how to configure mix release
 ```
 
 ## Core Concepts & Usage
+
+- [Custom Interpreter](#custom-interpreter)
+- [`Snex.pyeval`](#snexpyeval)
+- [Environments](#environments)
+  - [Initialization script](#initialization-script)
+  - [Passing `Snex.Env` between Erlang nodes](#passing-snexenv-between-erlang-nodes)
+- [Serialization](#serialization)
+  - [Encoding/decoding table](#encodingdecoding-table)
+  - [Customizing serialization](#customizing-serialization)
+- [Releases](#releases)
+- [Cookbook](#cookbook)
+  - [Run async code](#run-async-code)
+  - [Run blocking code](#run-blocking-code)
+  - [Use your in-repo project](#use-your-in-repo-project)
+  - [Send messages from Python code](#send-messages-from-python-code)
 
 ### Custom Interpreter
 
@@ -232,6 +250,8 @@ Alternatively, you can opt into manual management of `Snex.Env` lifetime by call
 Elixir data is serialized using a limited subset of Python's Pickle format (version 5), and deserialized on Python side using `pickle.loads()`.
 Python data is serialized with a subset of Erlang's External Term Format, and deserialized on Elixir side using `:erlang.binary_to_term/1`.
 
+#### Encoding/decoding table
+
 The serialization happens as outlined in the table:
 
 | (from) Elixir                | (to) Python     | (to) Elixir  | Comment                                                  |
@@ -316,7 +336,30 @@ end
     returning: "((typ.__module__, typ.__name__), next_date)")
 ```
 
-### Run async code
+### Releases
+
+Snex puts its managed files under `_build/$MIX_ENV/snex`.
+This works out of the box with `iex -S mix` and other local ways of running your code, but requires an additional step to copy files around to prepare your releases.
+
+Fortunately, accommodating releases is easy: just add `&Snex.Release.after_assemble/1` to `:steps` of your Mix release config.
+The only requirement is that it's placed after `:assemble` (and before `:tar`, if you use it.)
+
+```elixir
+# mix.exs
+def project do
+  [
+    releases: [
+      demo: [
+        steps: [:assemble, &Snex.Release.after_assemble/1]
+      ]
+    ]
+  ]
+end
+```
+
+### Cookbook
+
+#### Run async code
 
 Code ran by Snex lives in an [`asyncio`](https://docs.python.org/3/library/asyncio.html) loop.
 You can include async functions in your snippets and await them on the top level:
@@ -336,7 +379,7 @@ You can include async functions in your snippets and await them on the top level
     """, returning: ["result"])
 ```
 
-### Run blocking code
+#### Run blocking code
 
 A good way to run any blocking code is to prepare and use your own thread or process pools:
 
@@ -365,7 +408,7 @@ A good way to run any blocking code is to prepare and use your own thread or pro
     """, returning: "res")
 ```
 
-### Use your in-repo project
+#### Use your in-repo project
 
 You can reference your existing project path in `use Snex.Interpreter`.
 
@@ -400,7 +443,7 @@ end
 {:ok, "hi from bar"} = Snex.pyeval(env, "import foo", returning: "foo.bar()")
 ```
 
-### Send messages from Python code
+#### Send messages from Python code
 
 Snex allows sending asynchronous BEAM messages from within your running Python code.
 
@@ -421,27 +464,6 @@ Snex.pyeval(env, """
 )
 
 "hello from snex!" = receive do val -> val end
-```
-
-## Releases
-
-Snex puts its managed files under `_build/$MIX_ENV/snex`.
-This works out of the box with `iex -S mix` and other local ways of running your code, but requires an additional step to copy files around to prepare your releases.
-
-Fortunately, accommodating releases is easy: just add `&Snex.Release.after_assemble/1` to `:steps` of your Mix release config.
-The only requirement is that it's placed after `:assemble` (and before `:tar`, if you use it.)
-
-```elixir
-# mix.exs
-def project do
-  [
-    releases: [
-      demo: [
-        steps: [:assemble, &Snex.Release.after_assemble/1]
-      ]
-    ]
-  ]
-end
 ```
 
 [uv]: https://github.com/astral-sh/uv

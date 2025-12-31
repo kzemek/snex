@@ -1,9 +1,17 @@
 defmodule Snex do
   @external_resource "README.md"
   @moduledoc File.read!("README.md")
-             |> String.replace(~r/^.*?(?=Easy and efficient Python interop for Elixir)/s, "")
+             |> String.replace(
+               ~r/.*?Quick example\n(.*?)## Installation & Requirements\n.*?(?=### Custom Interpreter)/s,
+               "\\1"
+             )
+             |> String.replace(~r/^#/m, "")
+             |> String.replace("](#", "](#module-")
              |> String.replace("> [!WARNING]", "> #### Warning {: .warning}")
              |> String.replace("> [!IMPORTANT]", "> #### Important {: .info}")
+             |> String.replace_prefix("", """
+             Easy and efficient Python interop for Elixir.
+             """)
 
   alias Snex.Internal.Commands
 
