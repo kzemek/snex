@@ -447,7 +447,7 @@ end
 
 Snex allows sending asynchronous BEAM messages from within your running Python code.
 
-Every `env` is initialized with a `snex` object that contains a `send()` method, and can be passed a BEAM pid wrapped with `Snex.Serde.term/1`.
+Every `env` imports `snex` module that contains a `send()` method, and can be passed a BEAM pid wrapped with `Snex.Serde.term/1`.
 The message contents are encoded/decoded as described in [Serialization](#serialization).
 
 This works especially well with async processing, where you can send updates while the event loop processes your long-running tasks.
@@ -465,5 +465,7 @@ Snex.pyeval(env, """
 
 "hello from snex!" = receive do val -> val end
 ```
+
+In your external Python code (see [Use your in-repo project](#use-your-in-repo-project)), you can `import snex` (ensure `snex/py_src` is in your Python path) so your code and IDE are aware of Snex types, such as `snex.Atom`, and available functions, such as `send()`.
 
 [uv]: https://github.com/astral-sh/uv

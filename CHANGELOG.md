@@ -88,6 +88,10 @@
   `%Snex.Env{}` is directly referenced in the docs all over, so it makes sense to publicly type it with `Snex.Env.t()`.
   This replaces the previous opaque `Snex.env()` type.
 
+- **Move Snex interface code to a public module `snex`**
+
+  You can now import `snex` module from your external Python code to get awarness of Snex Python-side types and interface.
+
 ## 0.2.0
 
 ### Features

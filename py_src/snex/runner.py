@@ -9,7 +9,9 @@ import sys
 import traceback
 from typing import Any
 
-from . import interface, transport
+import snex
+
+from . import transport
 from .models import (
     Command,
     EnvID,
@@ -167,7 +169,9 @@ async def run_loop() -> None:
     running_tasks: set[asyncio.Task[Any]] = set()
 
     reader, writer = await transport.setup_io(loop)
-    root_env["snex"] = interface.Snex(writer)
+    snex._main_loop = loop  # noqa: SLF001
+    snex._writer = writer  # noqa: SLF001
+    root_env["snex"] = snex
 
     while True:
         try:
