@@ -42,6 +42,31 @@ defmodule SnexTest do
 
       assert_receive "hello from snex"
     end
+
+    test "can use atoms and tuples as send destinations", %{env: env} do
+      Process.register(self(), :test_send_destination)
+
+      assert :ok =
+               Snex.pyeval(
+                 env,
+                 "snex.send(snex.Atom('test_send_destination'), b'hello from snex')"
+               )
+
+      assert_receive "hello from snex"
+    end
+
+    test "can use tuples and snex.Term as send destinations", %{env: env} do
+      Process.register(self(), :test_sendt_destination)
+
+      assert :ok =
+               Snex.pyeval(
+                 env,
+                 "snex.send((snex.Atom('test_sendt_destination'), node), b'hello from snex')",
+                 %{"node" => Snex.Serde.term(node())}
+               )
+
+      assert_receive "hello from snex"
+    end
   end
 
   describe "returning" do

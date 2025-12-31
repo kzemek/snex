@@ -460,10 +460,20 @@ Snex.pyeval(env, """
   snex.send(self, b'hello from snex!')
   # insert long computation here
   """,
-  %{"self" => Snex.Serde.term(self())}
+  %{"self" => self()}
 )
 
 "hello from snex!" = receive do val -> val end
+
+# You can use any term supported by `Kernel.send/2` as destination
+Process.register(self(), :myname)
+Snex.pyeval(env, """
+  snex.send((snex.Atom('myname'), node), b'hello from snex (again!)')
+  """,
+  %{"node" => node()}
+)
+
+"hello from snex (again!)" = receive do val -> val end
 ```
 
 In your external Python code (see [Use your in-repo project](#use-your-in-repo-project)), you can `import snex` (ensure `snex/py_src` is in your Python path) so your code and IDE are aware of Snex types, such as `snex.Atom`, and available functions, such as `send()`.
