@@ -157,19 +157,27 @@ def on_task_done(
     running_tasks.discard(task)
 
     try:
-        result = task.result()
+        exc = task.exception()
+        result = task.result() if exc is None else None
+
         if result is not None:
-            transport.write_response(writer, req_id, result)
+            try:
+                transport.write_response(writer, req_id, result)
+            except Exception as e:  # noqa: BLE001
+                exc = e
+
+        if exc is not None:
+            error_result = ErrorResponse(
+                status="error",
+                code="python_runtime_error",
+                reason=str(exc),
+                traceback=traceback.format_exception(exc),
+            )
+
+            transport.write_response(writer, req_id, error_result)
+
     except asyncio.CancelledError:
         pass
-    except Exception as e:  # noqa: BLE001
-        result = ErrorResponse(
-            status="error",
-            code="python_runtime_error",
-            reason=str(e),
-            traceback=traceback.format_exception(e),
-        )
-        transport.write_response(writer, req_id, result)
 
 
 async def run_loop() -> None:
