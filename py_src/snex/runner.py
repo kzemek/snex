@@ -11,19 +11,20 @@ from typing import Any
 
 import snex
 
-from . import transport
+from . import interface, transport
 from .models import (
-    Command,
     EnvID,
     ErrorResponse,
     EvalCommand,
     GCCommand,
     InitCommand,
+    InRequest,
+    InResponse,
     MakeEnvCommand,
     OkEnvResponse,
     OkResponse,
     OkValueResponse,
-    Response,
+    OutResponse,
     generate_id,
 )
 
@@ -44,14 +45,14 @@ async def run_code(code: str, env: dict[str, Any]) -> None:
         await res
 
 
-async def run_init(cmd: InitCommand) -> Response:
+async def run_init(cmd: InitCommand) -> OkResponse:
     if cmd["code"]:
         await run_code(cmd["code"], root_env)
 
     return OkResponse(status="ok")
 
 
-def run_make_env(cmd: MakeEnvCommand) -> Response:
+def run_make_env(cmd: MakeEnvCommand) -> OkEnvResponse | ErrorResponse:
     env = root_env.copy()
 
     for from_env_cmd in cmd["from_env"]:
@@ -82,7 +83,7 @@ def run_make_env(cmd: MakeEnvCommand) -> Response:
     return OkEnvResponse(status="ok_env", id=env_id)
 
 
-async def run_eval(cmd: EvalCommand) -> Response:
+async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResponse:
     env_id = cmd["env"]
     try:
         env = envs[env_id]
@@ -119,25 +120,32 @@ def run_gc(cmd: GCCommand) -> None:
     envs.pop(cmd["env"], None)
 
 
-async def run(data: Command) -> Response | None:
+async def run(req_id: bytes, data: InRequest | InResponse) -> OutResponse | None:
+    result: OutResponse | None = None
+
     if data["command"] == "init":
-        return await run_init(data)
+        result = await run_init(data)
 
-    if data["command"] == "make_env":
-        return run_make_env(data)
+    elif data["command"] == "make_env":
+        result = run_make_env(data)
 
-    if data["command"] == "eval":
-        return await run_eval(data)
+    elif data["command"] == "eval":
+        result = await run_eval(data)
 
-    if data["command"] == "gc":
+    elif data["command"] == "gc":
         run_gc(data)
-        return None
 
-    return ErrorResponse(
-        status="error",
-        code="internal_error",
-        reason=f"Unknown command: {data}",
-    )
+    elif data["command"] == "call_response" or data["command"] == "call_error_response":
+        interface.on_call_response(req_id, data)
+
+    else:
+        result = ErrorResponse(
+            status="error",
+            code="internal_error",
+            reason=f"Unknown command: {data}",
+        )
+
+    return result
 
 
 def on_task_done(
@@ -169,8 +177,7 @@ async def run_loop() -> None:
     running_tasks: set[asyncio.Task[Any]] = set()
 
     reader, writer = await transport.setup_io(loop)
-    snex._main_loop = loop  # noqa: SLF001
-    snex._writer = writer  # noqa: SLF001
+    interface.init(writer)
     root_env["snex"] = snex
 
     while True:
@@ -189,15 +196,18 @@ async def run_loop() -> None:
             continue
 
         try:
-            req_id = all_data[:16]
+            req_id = bytes(all_data[:16])
 
-            if all_data[16] != transport.MessageType.REQUEST:
-                msg = f"Invalid message type: request expected, got {all_data[16]}"
+            if all_data[16] not in [
+                transport.MessageType.REQUEST,
+                transport.MessageType.RESPONSE,
+            ]:
+                msg = f"Invalid message type: {all_data[16]}"
                 raise ValueError(msg)  # noqa: TRY301
 
-            command: Command = pickle.loads(all_data[17:])  # noqa: S301
+            command: InRequest = pickle.loads(all_data[17:])  # noqa: S301
 
-            task = loop.create_task(run(command))
+            task = loop.create_task(run(req_id, command))
             running_tasks.add(task)
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),

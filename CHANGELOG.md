@@ -23,6 +23,15 @@
 
 ### Features
 
+- **New ways of calling Elixir code from Python**
+
+  Code running under Snex can use `snex.call(m, f, a)` and `snex.cast(m, f, a)` to communicate with the BEAM.
+  `snex.call` can be awaited on, and will return the result of the call, while `snex.cast` is fire-and-forget (returns `None`).
+  Both functions will run the `apply(m, f, a)` in a new process (`m`, `f` can be given as `str`, and will be converted to atoms).
+  They also accept an optional `node` argument that will spawn a process on a chosen Elixir node, as long as it's also running the `:snex` application.
+
+  Existing `snex.send(to, data)` function is now implemented on top of `snex.cast`.
+
 - **New `Snex.Interpreter` (and custom interpreters) options**
 
   - `:label` - labels the interpreter process through `:proc_lib.set_label/1`.

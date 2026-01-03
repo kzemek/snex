@@ -17,6 +17,8 @@ Easy and efficient Python interop for Elixir.
   A powerful and efficient interface with explicit control over data passing between Elixir and Python processes.
 - **Flexible:**
   Supports custom Python environments, `asyncio` code, and integration with external Python projects.
+- **Bidirectional communication**
+  Python code running under Snex can send, cast, and call Elixir code.
 - **Forward Compatibility:**
   Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
 
@@ -83,6 +85,7 @@ end
   - [Run blocking code](#run-blocking-code)
   - [Use your in-repo project](#use-your-in-repo-project)
   - [Send messages from Python code](#send-messages-from-python-code)
+  - [Cast and call Elixir code from Python](#cast-and-call-elixir-code-from-python)
 
 ### Custom Interpreter
 
@@ -479,3 +482,28 @@ Snex.pyeval(env, """
 In your external Python code (see [Use your in-repo project](#use-your-in-repo-project)), you can `import snex` (ensure `snex/py_src` is in your Python path) so your code and IDE are aware of Snex types, such as `snex.Atom`, and available functions, such as `send()`.
 
 [uv]: https://github.com/astral-sh/uv
+
+#### Cast and call Elixir code from Python
+
+Similar to `snex.send` above, you can also use `snex.cast(m, f, a)` and `snex.call(m, f, a)` to call Elixir functions from Python.
+In fact, `snex.send` is just a convenient interface on top of `snex.cast`!
+
+`snex.cast` and `snex.call` differ only in how they handle results.
+`snex.call` must be awaited on, and will return the result of whatever was called, while `snex.cast` is fire-and-forget.
+Both functions will run `apply(m, f, a)` in a new process (`m` and `f` will be converted to atoms if given as `str`).
+They also accept an optional `node` argument to apply the function on a remote node - as long as it's also running the `:snex` application.
+
+```elixir
+{:ok, inp} = Snex.Interpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:ok, agent} = Agent.start_link(fn -> 42 end)
+
+{:ok, 42} =
+  Snex.pyeval(
+    env,
+    "result = await snex.call('Elixir.Agent', 'get', [agent, identity])",
+    %{"agent" => agent, "identity" => & &1},
+    returning: "result"
+  )
+```

@@ -75,6 +75,31 @@ class SendCommand(TypedDict):
     data: Any
 
 
+class CallCommand(TypedDict):
+    command: Literal["call"]
+    module: str | Atom | Term
+    function: str | Atom | Term
+    node: str | Atom | Term | None
+    args: list[Any]
+
+
+class CastCommand(TypedDict):
+    command: Literal["cast"]
+    module: str | Atom | Term
+    function: str | Atom | Term
+    node: str | Atom | Term | None
+    args: list[Any]
+
+
+class CallResponse(TypedDict):
+    command: Literal["call_response"]
+    result: Any
+
+
+class CallErrorResponse(TypedDict):
+    command: Literal["call_error_response"]
+
+
 class ErrorResponse(TypedDict):
     status: Literal["error"]
     code: Literal[
@@ -87,6 +112,7 @@ class ErrorResponse(TypedDict):
     traceback: NotRequired[list[str] | None]
 
 
-Command = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
-Request = SendCommand
-Response = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse
+InRequest = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
+InResponse = CallResponse | CallErrorResponse
+OutRequest = SendCommand | CallCommand | CastCommand
+OutResponse = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse

@@ -133,3 +133,47 @@ defmodule Snex.Internal.Commands.GC do
       do: %{"command" => "gc", "env" => Snex.Serde.binary(command.env.id)}
   end
 end
+
+defmodule Snex.Internal.Commands.CallResponse do
+  @moduledoc false
+
+  @type t :: %__MODULE__{
+          result: term()
+        }
+
+  @enforce_keys [:result]
+  defstruct [:result]
+
+  defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
+    def referenced_envs(%@for{}),
+      do: []
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{} = command),
+      do: %{"command" => "call_response", "result" => command.result}
+  end
+end
+
+defmodule Snex.Internal.Commands.CallErrorResponse do
+  @moduledoc false
+
+  @type t :: %__MODULE__{}
+
+  @enforce_keys []
+  defstruct []
+
+  defimpl Snex.Internal.Command do
+    @impl Snex.Internal.Command
+    def referenced_envs(%@for{}),
+      do: []
+  end
+
+  defimpl Snex.Serde.Encoder do
+    @impl Snex.Serde.Encoder
+    def encode(%@for{}),
+      do: %{"command" => "call_error_response"}
+  end
+end

@@ -77,9 +77,16 @@ def _default_custom_encoder(data: Any) -> Any:  # noqa: ANN401
 _custom_encoder: Callable[[Any], Any] = _default_custom_encoder
 
 
-def set_custom_encoder(custom_encoder: Callable[[Any], Any]) -> None:
+def set_custom_encoder(encoder_fun: Callable[[Any], Any]) -> None:
+    """
+    Set a custom encoding function for objects that are not supported by default.
+
+    Args:
+        encoder_fun: The function to use to encode the objects
+
+    """
     global _custom_encoder  # noqa: PLW0603
-    _custom_encoder = custom_encoder
+    _custom_encoder = encoder_fun
 
 
 def encode(data: Any) -> Parts:  # noqa: ANN401

@@ -2,6 +2,8 @@ defmodule SnexTest do
   use ExUnit.Case, async: true
   use MarkdownDoctest
 
+  import ExUnit.CaptureLog
+
   markdown_doctest "README.md",
     except:
       &String.contains?(&1, [
@@ -66,6 +68,94 @@ defmodule SnexTest do
                )
 
       assert_receive "hello from snex"
+    end
+  end
+
+  describe "snex.call" do
+    test "can call Elixir functions from Python and get the result", %{env: env} do
+      {:ok, agent} = Agent.start_link(fn -> 42 end)
+
+      assert {:ok, 42} =
+               Snex.pyeval(
+                 env,
+                 "result = await snex.call(snex.Atom('Elixir.Agent'), snex.Atom('get'), [agent, identity])",
+                 %{"agent" => agent, "identity" => &Function.identity/1},
+                 returning: "result"
+               )
+    end
+
+    test "can call with string module/function names", %{env: env} do
+      assert {:ok, 3} =
+               Snex.pyeval(
+                 env,
+                 "result = await snex.call('Elixir.Kernel', 'length', [[1, 2, 3]])",
+                 returning: "result"
+               )
+    end
+
+    test "call raises ElixirError when Elixir function raises", %{env: env} do
+      assert {{:error, %Snex.Error{code: :python_runtime_error, reason: reason}}, log} =
+               with_log(fn ->
+                 Snex.pyeval(
+                   env,
+                   "await snex.call(snex.Atom('Elixir.Kernel'), snex.Atom('div'), [10, 0])"
+                 )
+               end)
+
+      assert reason =~ "failed on Elixir side"
+      assert log =~ "bad argument in arithmetic expression"
+    end
+
+    test "can handle multiple concurrent calls", %{env: env} do
+      {:ok, agent} = Agent.start_link(fn -> 0 end)
+
+      assert {:ok, [1, 2, 3]} =
+               Snex.pyeval(
+                 env,
+                 """
+                 import asyncio
+                 results = await asyncio.gather(
+                   snex.call("Elixir.Agent", "get_and_update", [agent, fun]),
+                   snex.call("Elixir.Agent", "get_and_update", [agent, fun]),
+                   snex.call("Elixir.Agent", "get_and_update", [agent, fun])
+                 )
+                 """,
+                 %{"agent" => agent, "fun" => &{&1 + 1, &1 + 1}},
+                 returning: "results"
+               )
+    end
+  end
+
+  describe "snex.cast" do
+    test "can cast to Elixir functions without waiting for response", %{env: env} do
+      {:ok, agent} = Agent.start_link(fn -> 0 end)
+
+      assert :ok =
+               Snex.pyeval(
+                 env,
+                 "snex.cast(snex.Atom('Elixir.Agent'), snex.Atom('update'), [agent, update_fn])",
+                 %{"agent" => agent, "update_fn" => &(&1 + 1)}
+               )
+
+      assert Enum.find(1..100, fn _ ->
+               if Agent.get(agent, & &1) == 1 do
+                 true
+               else
+                 Process.sleep(1)
+                 false
+               end
+             end)
+    end
+
+    test "can cast with string module/function names", %{env: env} do
+      assert :ok =
+               Snex.pyeval(
+                 env,
+                 "snex.cast('Elixir.Kernel', 'send', [target, b'cast_message'])",
+                 %{"target" => self()}
+               )
+
+      assert_receive "cast_message", 500
     end
   end
 

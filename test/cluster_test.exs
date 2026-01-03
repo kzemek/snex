@@ -28,17 +28,17 @@ defmodule Snex.ClusterTest do
           do: {Snex.Interpreter, remote_node},
           else: interpreter_pid
 
-      %{remote_node: remote_node, interpreter: interpreter}
+      %{remote_node: remote_node, remote_interpreter: interpreter}
     end
 
     for suffix <- ["", " by name"] do
       @describetag by_name?: suffix == " by name"
 
       test "copy remote env on another node#{suffix}",
-           %{remote_node: remote_node, interpreter: interpreter} do
+           %{remote_node: remote_node, remote_interpreter: remote_interpreter} do
         remote_env =
           :erpc.call(remote_node, fn ->
-            {:ok, env} = Snex.make_env(interpreter, %{"v" => 42})
+            {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 42})
             {:ok, _} = Agent.start(fn -> env end)
             env
           end)
@@ -48,16 +48,16 @@ defmodule Snex.ClusterTest do
         assert {:ok, 42} = Snex.pyeval(local_env, returning: "v")
       end
 
-      test "make_env on remote interpreter#{suffix}", %{interpreter: interpreter} do
-        {:ok, env} = Snex.make_env(interpreter, %{"v" => 123})
+      test "make_env on remote interpreter#{suffix}", %{remote_interpreter: remote_interpreter} do
+        {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 123})
         assert {:ok, 123} = Snex.pyeval(env, returning: "v")
       end
 
       test "run pyeval on remote env#{suffix}",
-           %{remote_node: remote_node, interpreter: interpreter} do
+           %{remote_node: remote_node, remote_interpreter: remote_interpreter} do
         remote_env =
           :erpc.call(remote_node, fn ->
-            {:ok, env} = Snex.make_env(interpreter, %{"v" => 567})
+            {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 567})
             {:ok, _} = Agent.start(fn -> env end)
             env
           end)
@@ -66,11 +66,11 @@ defmodule Snex.ClusterTest do
       end
 
       test "disable GC on remote env, send it to local and back, disable GC again#{suffix}",
-           %{remote_node: remote_node, interpreter: interpreter} do
+           %{remote_node: remote_node, remote_interpreter: remote_interpreter} do
         {:ok, env_agent} =
           :erpc.call(remote_node, Agent, :start, [
             fn ->
-              {:ok, env} = Snex.make_env(interpreter, %{"v" => 1024})
+              {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 1024})
               # we should've used env that we got from `disable_gc`, but we're simulating
               # a case where the other node received an env with a resource
               _ = Snex.Env.disable_gc(env)
@@ -92,8 +92,9 @@ defmodule Snex.ClusterTest do
                  end)
       end
 
-      test "disable GC on local env for remote interpreter#{suffix}", %{interpreter: interpreter} do
-        {:ok, env} = Snex.make_env(interpreter, %{"v" => 4096})
+      test "disable GC on local env for remote interpreter#{suffix}",
+           %{remote_interpreter: remote_interpreter} do
+        {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 4096})
         env = Snex.Env.disable_gc(env)
 
         assert {:ok, 4096} = Snex.pyeval(env, returning: "v")
@@ -102,10 +103,10 @@ defmodule Snex.ClusterTest do
       end
 
       test "destroy_env can be called from local node on remote env#{suffix}",
-           %{remote_node: remote_node, interpreter: interpreter} do
+           %{remote_node: remote_node, remote_interpreter: remote_interpreter} do
         remote_env =
           :erpc.call(remote_node, fn ->
-            {:ok, env} = Snex.make_env(interpreter, %{"v" => 789})
+            {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 789})
             env = Snex.Env.disable_gc(env)
             env
           end)
@@ -120,8 +121,8 @@ defmodule Snex.ClusterTest do
       end
 
       test "destroy_env is idempotent across nodes#{suffix}",
-           %{remote_node: remote_node, interpreter: interpreter} do
-        {:ok, env} = Snex.make_env(interpreter, %{"v" => 555})
+           %{remote_node: remote_node, remote_interpreter: remote_interpreter} do
+        {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 555})
         env = Snex.Env.disable_gc(env)
 
         assert :ok = Snex.destroy_env(env)
@@ -130,6 +131,49 @@ defmodule Snex.ClusterTest do
 
         assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "v")
       end
+    end
+
+    test "can call Elixir functions on remote node from Python",
+         %{remote_interpreter: remote_interpreter} do
+      {:ok, _agent} = Agent.start_link(fn -> %{counter: 0} end, name: TestAgent)
+      {:ok, env} = Snex.make_env(remote_interpreter)
+
+      assert {:ok, %{counter: 1}} =
+               Snex.pyeval(
+                 env,
+                 """
+                 result = await snex.call(
+                   "Elixir.Agent", "get", [agent, identity],
+                   node=this_node
+                 )
+
+                 result['counter'] = result['counter'] + 1
+                 """,
+                 %{"agent" => TestAgent, "identity" => & &1, "this_node" => node()},
+                 returning: "result"
+               )
+    end
+
+    test "can cast to Elixir functions on remote node from Python",
+         %{remote_interpreter: remote_interpreter} do
+      {:ok, agent} = Agent.start_link(fn -> 0 end, name: TestAgent)
+      {:ok, env} = Snex.make_env(remote_interpreter)
+
+      assert :ok =
+               Snex.pyeval(
+                 env,
+                 "snex.cast('Elixir.Agent', 'update', [agent, update_fn], node=this_node)",
+                 %{"agent" => TestAgent, "update_fn" => &(&1 + 100), "this_node" => node()}
+               )
+
+      assert Enum.find(1..100, fn _ ->
+               if Agent.get(agent, & &1) == 100 do
+                 true
+               else
+                 Process.sleep(1)
+                 false
+               end
+             end)
     end
   end
 end

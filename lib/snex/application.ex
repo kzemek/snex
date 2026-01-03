@@ -13,7 +13,11 @@ defmodule Snex.Application do
 
   @impl Application
   def start(_type, _args) do
-    children = [Snex.Internal.GarbageCollector]
+    children = [
+      {Task.Supervisor, name: Snex.Internal.TaskSupervisor},
+      Snex.Internal.GarbageCollector
+    ]
+
     Supervisor.start_link(children, strategy: :one_for_one)
   end
 end

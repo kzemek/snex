@@ -3,7 +3,7 @@ from enum import IntEnum
 from typing import Literal
 
 from . import etf
-from .models import Request, Response
+from .models import OutRequest, OutResponse
 
 
 class MessageType(IntEnum):
@@ -15,8 +15,8 @@ def _write_data(
     writer: asyncio.WriteTransport,
     req_id: bytes,
     data: (
-        tuple[Literal[MessageType.REQUEST], Request]
-        | tuple[Literal[MessageType.RESPONSE], Response]
+        tuple[Literal[MessageType.REQUEST], OutRequest]
+        | tuple[Literal[MessageType.RESPONSE], OutResponse]
     ),
 ) -> None:
     data_list = etf.encode(data[1])
@@ -36,7 +36,7 @@ def _write_data(
 def write_request(
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    request: Request,
+    request: OutRequest,
 ) -> None:
     _write_data(writer, req_id, (MessageType.REQUEST, request))
 
@@ -44,7 +44,7 @@ def write_request(
 def write_response(
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    response: Response,
+    response: OutResponse,
 ) -> None:
     _write_data(writer, req_id, (MessageType.RESPONSE, response))
 

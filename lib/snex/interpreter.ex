@@ -37,16 +37,24 @@ defmodule Snex.Interpreter do
   """
   @type server :: GenServer.server()
 
-  @typep command :: Commands.Init.t() | Commands.MakeEnv.t() | Commands.Eval.t() | Commands.GC.t()
+  @typep command ::
+           Commands.Init.t()
+           | Commands.MakeEnv.t()
+           | Commands.Eval.t()
+           | Commands.GC.t()
+           | Commands.CallResponse.t()
+           | Commands.CallErrorResponse.t()
+
   @typep request_id :: binary()
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, pending: %{}]
+  defstruct [:port, pending: %{}, pending_tasks: %{}]
 
   @typep state :: %State{
            port: port(),
-           pending: %{optional(request_id()) => %{client: GenServer.from()}}
+           pending: %{optional(request_id()) => %{client: GenServer.from()}},
+           pending_tasks: %{optional(Task.ref()) => request_id()}
          }
 
   defmacro __using__(opts),
@@ -72,7 +80,8 @@ defmodule Snex.Interpreter do
   def command(interpreter, port, command, timeout) do
     envs = Internal.Command.referenced_envs(command)
 
-    {id, encoded_command} = encode_command(command)
+    id = generate_request_id()
+    encoded_command = encode_command(command, id)
     request_id = :gen_server.send_request(interpreter, {:expect_reply, id})
     run_command(interpreter, port, encoded_command)
 
@@ -90,10 +99,11 @@ defmodule Snex.Interpreter do
   end
 
   @doc false
-  @spec command_noreply(server(), port(), command()) :: :ok
-  def command_noreply(interpreter, port, command) do
+  @spec command_noreply(server(), port(), request_id() | nil, command()) :: :ok
+  def command_noreply(interpreter, port, id \\ nil, command) do
     envs = Internal.Command.referenced_envs(command)
-    {_id, encoded_command} = encode_command(command)
+    id = id || generate_request_id()
+    encoded_command = encode_command(command, id)
     run_command(interpreter, port, encoded_command)
     Snex.Env.touch(envs)
   end
@@ -222,52 +232,75 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  @spec handle_info(any(), state()) ::
+  @spec handle_info({port(), {:data, binary()}}, state()) ::
           {:noreply, state()} | {:stop, {:exit_status, non_neg_integer()}, state()}
   def handle_info(
         {port, {:data, <<id::binary-size(16), @response, data::binary>>}},
         %State{port: port} = state
-      ) do
-    {pending_entry, pending} = Map.pop(state.pending, id)
-
-    case pending_entry do
-      %{client: client} ->
-        GenServer.reply(client, data)
-
-      nil ->
-        case decode_reply(data, port, self()) do
-          {:ok, result} ->
-            Logger.warning("Received data for unknown request #{inspect(id)}: #{inspect(result)}")
-
-          {:error, reason} ->
-            Logger.warning(
-              "Received data for unknown request #{inspect(id)} and encountered an error decoding it: #{inspect(reason)}"
-            )
-        end
-    end
-
+      )
+      when is_map_key(state.pending, id) do
+    {%{client: client}, pending} = Map.pop!(state.pending, id)
+    GenServer.reply(client, data)
     {:noreply, %State{state | pending: pending}}
   end
 
   def handle_info(
-        {port, {:data, <<_id::binary-size(16), @request, data::binary>>}},
+        {port, {:data, <<id::binary-size(16), @request, data::binary>>}},
         %State{port: port} = state
       ) do
-    case Snex.Serde.decode(data) do
-      {:ok, %{"command" => "send", "to" => to, "data" => data}} ->
-        send(to, data)
+    task =
+      Task.Supervisor.async_nolink(Snex.Internal.TaskSupervisor, fn ->
+        case Snex.Serde.decode(data) do
+          {:ok, %{"command" => cmd, "module" => m, "function" => f, "args" => a, "node" => node}} ->
+            result = call_or_cast(cmd, to_atom(m), to_atom(f), a, to_atom(node))
+            (cmd == "call" && {:reply, result}) || :noreply
 
-      other ->
-        Logger.warning("Received unexpected request: #{inspect(other)}")
-    end
+          other ->
+            Logger.warning("Received unexpected request: #{inspect(other)}")
+            :noreply
+        end
+      end)
 
-    {:noreply, state}
+    {:noreply, %State{state | pending_tasks: Map.put(state.pending_tasks, task.ref, id)}}
   end
 
+  @spec handle_info({port(), {:exit_status, integer()}}, state()) ::
+          {:stop, Snex.Error.t(), state()}
   def handle_info({port, {:exit_status, _status} = reason}, %State{port: port} = state) do
     {:stop, Snex.Error.exception(code: :interpreter_exited, reason: reason), state}
   end
 
+  @spec handle_info({Task.ref(), term()}, state()) :: {:noreply, state()}
+  def handle_info({ref, result}, state) when is_map_key(state.pending_tasks, ref) do
+    Process.demonitor(ref, [:flush])
+    {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
+
+    case result do
+      :noreply ->
+        :ok
+
+      {:reply, result} ->
+        command_noreply(self(), state.port, id, %Commands.CallResponse{result: result})
+    end
+
+    {:noreply, %State{state | pending_tasks: pending_tasks}}
+  end
+
+  @spec handle_info({:DOWN, Task.ref(), term(), term(), term()}, state()) :: {:noreply, state()}
+  def handle_info({:DOWN, ref, _, _, reason}, state) when is_map_key(state.pending_tasks, ref) do
+    {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
+
+    if id do
+      Logger.warning("Call (id: #{Base.encode64(id)}) failed on Elixir side: #{inspect(reason)}")
+      # Once we add a setting to encode binaries as bytes by default, we will be safe to
+      # include the whole `reason` in the error response, as it will virtually always encode.
+      command_noreply(self(), state.port, id, %Commands.CallErrorResponse{})
+    end
+
+    {:noreply, %State{state | pending_tasks: pending_tasks}}
+  end
+
+  @spec handle_info(any(), state()) :: {:noreply, state()}
   def handle_info(message, %State{} = state) do
     Logger.warning("Received unexpected message: #{inspect(message)}")
     {:noreply, state}
@@ -317,7 +350,8 @@ defmodule Snex.Interpreter do
 
   defp run_init_script(port, opts) do
     command = %Commands.Init{code: opts[:init_script]}
-    {id, encoded_command} = encode_command(command)
+    id = generate_request_id()
+    encoded_command = encode_command(command, id)
     run_command(self(), port, encoded_command)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
@@ -397,8 +431,21 @@ defmodule Snex.Interpreter do
   defp generate_request_id,
     do: :rand.bytes(16)
 
-  defp encode_command(command) do
-    id = generate_request_id()
-    {id, [id, @request, Snex.Serde.encode_to_iodata!(command)]}
+  defp encode_command(command, id),
+    do: [id, @request, Snex.Serde.encode_to_iodata!(command)]
+
+  defp call_or_cast(_command, m, f, a, node) when node in [nil, node()],
+    do: apply(m, f, a)
+
+  defp call_or_cast("cast", m, f, a, node),
+    do: Task.Supervisor.start_child({Snex.Internal.TaskSupervisor, node}, m, f, a)
+
+  defp call_or_cast("call", m, f, a, node) do
+    Task.Supervisor.async({Snex.Internal.TaskSupervisor, node}, m, f, a)
+    |> Task.await(:infinity)
   end
+
+  # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+  defp to_atom(value) when is_binary(value), do: String.to_atom(value)
+  defp to_atom(value) when is_atom(value), do: value
 end
