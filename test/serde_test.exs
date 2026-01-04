@@ -73,6 +73,16 @@ defmodule Snex.SerdeTest do
                  returning: "len(x) == 1 and (x['a'] == 'hello' or x['a'] == 'world')"
                )
     end
+
+    test "can be more than 255 bytes long", %{env: env} do
+      atom_str = String.duplicate("ź", 255)
+      assert byte_size(atom_str) > 255
+
+      assert {:ok, true} =
+               Snex.pyeval(env, %{"a" => String.to_atom(atom_str)},
+                 returning: "type(a) is snex.Atom and len(a) == 255"
+               )
+    end
   end
 
   describe "Python snex.Atom" do

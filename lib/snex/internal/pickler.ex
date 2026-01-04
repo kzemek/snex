@@ -99,8 +99,8 @@ defmodule Snex.Internal.Pickler do
     do: if(b, do: @newtrue, else: @newfalse)
 
   defp encode_atom(a) do
-    name_str = Atom.to_string(a)
-    [[@global, @atom_class], [@short_binunicode, byte_size(name_str), name_str], @tuple1, @reduce]
+    encoded = a |> Atom.to_string() |> encode_string()
+    [@global, @atom_class, encoded, @tuple1, @reduce]
   end
 
   defp encode_integer(i) when i in 0..0xFF,
