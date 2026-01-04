@@ -14,10 +14,13 @@ defmodule Snex.Serde do
   @opaque serde_object :: Pickler.record_object()
   @opaque serde_float :: Pickler.record_float()
 
+  @type encoding_opts :: []
+
   @doc false
-  @spec encode_to_iodata!(term()) :: iodata()
-  def encode_to_iodata!(term),
-    do: Pickler.encode_to_iodata!(term)
+  defdelegate encode_to_iodata!(term, opts \\ []), to: Pickler
+
+  @doc false
+  defdelegate encode_fragment!(term, opts \\ []), to: Pickler
 
   @doc false
   @spec decode(binary()) :: {:ok, term()} | {:error, term()}

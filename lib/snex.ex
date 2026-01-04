@@ -40,12 +40,17 @@ defmodule Snex do
   @typedoc """
   Option for `Snex.make_env/3`.
   """
-  @type make_env_opt :: {:from, from_env() | [from_env()]}
+  @type make_env_opt ::
+          {:from, from_env() | [from_env()]}
+          | {:encoding_opts, Snex.Serde.encoding_opts()}
 
   @typedoc """
   Option for `Snex.pyeval/4`.
   """
-  @type pyeval_opt :: {:returning, [String.t()] | String.t()} | {:timeout, timeout()}
+  @type pyeval_opt ::
+          {:returning, [String.t()] | String.t()}
+          | {:timeout, timeout()}
+          | {:encoding_opts, Snex.Serde.encoding_opts()}
 
   @doc """
   Shorthand for `Snex.make_env/3`:
@@ -118,6 +123,12 @@ defmodule Snex do
       * `:only` - a list of variable names to copy from the `from` environment.
       * `:except` - a list of variable names to exclude from the `from` environment.
 
+    * `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - a list of encoding options to be used
+      to encode `additional_vars`. These options will be merged with `:encoding_opts` given
+      to the interpreter's `start_link/1` function.
+
+      Note that these options *do not* affect commands that use the created environment!
+
   ## Examples
 
       # Create a new empty environment
@@ -146,15 +157,12 @@ defmodule Snex do
     from_env = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
     command = %Commands.MakeEnv{from_env: from_env, additional_vars: additional_vars}
 
-    port =
-      case from_env do
-        [%Commands.MakeEnv.FromEnv{env: %Snex.Env{port: port}} | _] -> port
-        _ -> Snex.Interpreter.get_port(interpreter)
-      end
+    %{port: port, encoding_opts: encoding_opts} = Snex.Interpreter.get_settings(interpreter)
+    merged_encoding_opts = Keyword.merge(encoding_opts, Keyword.get(opts, :encoding_opts, []))
 
     with {:ok, env_id} <-
-           Snex.Interpreter.command(interpreter, port, command, :infinity),
-         do: {:ok, Snex.Env.make(env_id, port, interpreter)}
+           Snex.Interpreter.command(interpreter, port, command, merged_encoding_opts, :infinity),
+         do: {:ok, Snex.Env.make(env_id, port, interpreter, encoding_opts)}
   end
 
   @doc """
@@ -170,7 +178,14 @@ defmodule Snex do
   """
   @spec destroy_env(Snex.Env.t()) :: :ok
   def destroy_env(%Snex.Env{} = env) do
-    :ok = Snex.Interpreter.command_noreply(env.interpreter, env.port, %Commands.GC{env: env})
+    :ok =
+      Snex.Interpreter.command_noreply(
+        env.interpreter,
+        env.port,
+        %Commands.GC{env: env},
+        env.encoding_opts
+      )
+
     if env.ref != nil and node(env.ref) == node(), do: Snex.Env.disable_gc(env)
     :ok
   end
@@ -245,6 +260,12 @@ defmodule Snex do
     * `:timeout` - the timeout for the evaluation. Can be a `timeout()` or `:infinity`.
       Default: 5 seconds.
 
+    * `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - a list of encoding options to be used
+      to encode `additional_vars`. These options will be merged with `:encoding_opts` given
+      to the interpreter's `start_link/1` function.
+
+      Note that these options *do not* affect the encoding of `snex.call` return values!
+
   ## Examples
 
       Snex.pyeval(env, """
@@ -276,12 +297,10 @@ defmodule Snex do
         returning: returning
       }
 
-    Snex.Interpreter.command(
-      env.interpreter,
-      env.port,
-      command,
-      Keyword.get(opts, :timeout, to_timeout(second: 5))
-    )
+    encoding_opts = Keyword.merge(env.encoding_opts, Keyword.get(opts, :encoding_opts, []))
+    timeout = Keyword.get(opts, :timeout, to_timeout(second: 5))
+
+    Snex.Interpreter.command(env.interpreter, env.port, command, encoding_opts, timeout)
   end
 
   defp check_additional_vars(additional_vars) do

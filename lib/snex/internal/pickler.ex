@@ -2,9 +2,9 @@ defmodule Snex.Internal.Pickler do
   @moduledoc false
 
   import Bitwise
-  import Record, only: [defrecord: 3, is_record: 2]
+  import Record
 
-  alias __MODULE__.{Object, Binary, Float}
+  alias __MODULE__.{Object, Binary, Float, Fragment}
   alias Snex.Serde
 
   @start <<0x80>>
@@ -70,25 +70,41 @@ defmodule Snex.Internal.Pickler do
   defrecord :float, Float, [:value]
   @type record_float :: record(:float, value: float() | :inf | :"-inf" | :nan)
 
-  @spec encode_to_iodata!(term()) :: iodata()
-  def encode_to_iodata!(term),
-    do: [@start, @protocol_version, do_encode(term), @stop]
+  defrecordp :fragment, Fragment, [:iodata]
+  @opaque record_fragment :: record(:fragment, iodata: iodata())
 
-  defp do_encode(n) when is_nil(n), do: encode_nil()
-  defp do_encode(b) when is_boolean(b), do: encode_boolean(b)
-  defp do_encode(a) when is_atom(a), do: encode_atom(a)
-  defp do_encode(i) when is_integer(i), do: encode_integer(i)
-  defp do_encode(f) when is_float(f), do: encode_float(f)
-  defp do_encode(s) when is_binary(s), do: encode_string(s)
-  defp do_encode(b) when is_record(b, Binary), do: encode_bytes(b)
-  defp do_encode(o) when is_record(o, Object), do: encode_object(o)
-  defp do_encode(f) when is_record(f, Float), do: encode_float(f)
-  defp do_encode(s) when is_struct(s, MapSet), do: encode_set(s)
-  defp do_encode(m) when is_struct(m), do: encode_struct(m)
-  defp do_encode(m) when is_map(m), do: encode_map(m)
-  defp do_encode(l) when is_list(l), do: encode_list(l)
-  defp do_encode(t) when is_tuple(t), do: encode_tuple(t)
-  defp do_encode(other), do: encode_term(other)
+  defrecordp :encoding_opts, []
+
+  defp make_encoding_opts(opts) do
+    List.foldl(opts, encoding_opts(), fn
+      {key, value}, _acc -> raise ArgumentError, "unknown option: #{key}: #{value}"
+    end)
+  end
+
+  @spec encode_to_iodata!(term(), Serde.encoding_opts()) :: iodata()
+  def encode_to_iodata!(term, opts \\ []),
+    do: [@start, @protocol_version, do_encode(term, make_encoding_opts(opts)), @stop]
+
+  @spec encode_fragment!(term(), Serde.encoding_opts()) :: record_fragment()
+  def encode_fragment!(term, opts \\ []),
+    do: fragment(iodata: do_encode(term, make_encoding_opts(opts)))
+
+  defp do_encode(n, _opts) when is_nil(n), do: encode_nil()
+  defp do_encode(b, _opts) when is_boolean(b), do: encode_boolean(b)
+  defp do_encode(a, _opts) when is_atom(a), do: encode_atom(a)
+  defp do_encode(i, _opts) when is_integer(i), do: encode_integer(i)
+  defp do_encode(f, _opts) when is_float(f), do: encode_float(f)
+  defp do_encode(s, _opts) when is_binary(s), do: encode_string(s)
+  defp do_encode(b, _opts) when is_record(b, Binary), do: encode_bytes(b)
+  defp do_encode(o, opts) when is_record(o, Object), do: encode_object(o, opts)
+  defp do_encode(f, _opts) when is_record(f, Float), do: encode_float(f)
+  defp do_encode(f, _opts) when is_record(f, Fragment), do: fragment(f, :iodata)
+  defp do_encode(s, opts) when is_struct(s, MapSet), do: encode_set(s, opts)
+  defp do_encode(m, opts) when is_struct(m), do: encode_struct(m, opts)
+  defp do_encode(m, opts) when is_map(m), do: encode_map(m, opts)
+  defp do_encode(l, opts) when is_list(l), do: encode_list(l, opts)
+  defp do_encode(t, opts) when is_tuple(t), do: encode_tuple(t, opts)
+  defp do_encode(other, _opts), do: encode_term(other)
 
   defp encode_nil,
     do: @none
@@ -153,17 +169,17 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  defp encode_object(object(module: module, classname: classname, args: args)),
-    do: [@global, module, "\n", classname, "\n", encode_tuple(args), @reduce]
+  defp encode_object(object(module: module, classname: classname, args: args), opts),
+    do: [@global, module, "\n", classname, "\n", encode_tuple(args, opts), @reduce]
 
-  defp encode_list(l),
-    do: [@mark, encode_list_elems(l), @list]
+  defp encode_list(l, opts),
+    do: [@mark, encode_list_elems(l, opts), @list]
 
-  defp encode_tuple(t) do
+  defp encode_tuple(t, opts) do
     elems =
       if is_list(t),
-        do: encode_list_elems(t),
-        else: encode_tuple_elems(t)
+        do: encode_list_elems(t, opts),
+        else: encode_tuple_elems(t, opts)
 
     case elems do
       [] -> @empty_tuple
@@ -174,27 +190,27 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  defp encode_set(s),
-    do: [@empty_set, @mark, encode_set_elems(s), @additems]
+  defp encode_set(s, opts),
+    do: [@empty_set, @mark, encode_set_elems(s, opts), @additems]
 
   # We don't ship with any Snex.Serde.Encoder implementations, so Dialyzer complains the `case`
   # is always nil
-  @dialyzer {:no_match, encode_struct: 1}
-  defp encode_struct(%struct{} = s) do
+  @dialyzer {:no_match, encode_struct: 2}
+  defp encode_struct(%struct{} = s, opts) do
     case Serde.Encoder.impl_for(s) do
       nil ->
-        encode_map(s)
+        encode_map(s, opts)
 
       encoder ->
         case encoder.encode(s) do
-          %^struct{} = same_struct_type -> encode_map(same_struct_type)
-          encoded -> do_encode(encoded)
+          %^struct{} = same_struct_type -> encode_map(same_struct_type, opts)
+          encoded -> do_encode(encoded, opts)
         end
     end
   end
 
-  defp encode_map(map),
-    do: [@empty_dict, @mark, encode_map_elems(map), @setitems]
+  defp encode_map(map, opts),
+    do: [@empty_dict, @mark, encode_map_elems(map, opts), @setitems]
 
   defp encode_term(term),
     do: [@global, @term_class, encode_bytes(:erlang.term_to_binary(term)), @tuple1, @reduce]
@@ -219,29 +235,29 @@ defmodule Snex.Internal.Pickler do
     {<<i::little-signed-unit(8)-size(bytes_num)>>, bytes_num}
   end
 
-  defp encode_list_elems(list),
-    do: list |> do_encode_list_elems([]) |> Enum.reverse()
+  defp encode_list_elems(list, opts),
+    do: list |> do_encode_list_elems(opts, []) |> Enum.reverse()
 
-  defp encode_tuple_elems(tuple),
-    do: tuple |> Tuple.to_list() |> do_encode_list_elems([]) |> Enum.reverse()
+  defp encode_tuple_elems(tuple, opts),
+    do: tuple |> Tuple.to_list() |> do_encode_list_elems(opts, []) |> Enum.reverse()
 
-  defp encode_set_elems(set),
-    do: set |> MapSet.to_list() |> do_encode_list_elems([])
+  defp encode_set_elems(set, opts),
+    do: set |> MapSet.to_list() |> do_encode_list_elems(opts, [])
 
-  defp encode_map_elems(map),
-    do: map |> Map.to_list() |> do_encode_map_elems([])
+  defp encode_map_elems(map, opts),
+    do: map |> Map.to_list() |> do_encode_map_elems(opts, [])
 
-  defp do_encode_list_elems([], acc),
+  defp do_encode_list_elems([], _opts, acc),
     do: acc
 
-  defp do_encode_list_elems([elem | rest], acc),
-    do: do_encode_list_elems(rest, [do_encode(elem) | acc])
+  defp do_encode_list_elems([elem | rest], opts, acc),
+    do: do_encode_list_elems(rest, opts, [do_encode(elem, opts) | acc])
 
-  defp do_encode_map_elems([], acc),
+  defp do_encode_map_elems([], _opts, acc),
     do: acc
 
-  defp do_encode_map_elems([{k, v} | rest], acc),
-    do: do_encode_map_elems(rest, [do_encode(k), do_encode(v) | acc])
+  defp do_encode_map_elems([{k, v} | rest], opts, acc),
+    do: do_encode_map_elems(rest, opts, [do_encode(k, opts), do_encode(v, opts) | acc])
 
   defp iodata_size(b),
     do: if(is_binary(b), do: byte_size(b), else: IO.iodata_length(b))

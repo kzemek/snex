@@ -50,12 +50,13 @@ defmodule Snex.Interpreter do
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, pending: %{}, pending_tasks: %{}]
+  defstruct [:port, :encoding_opts, pending: %{}, pending_tasks: %{}]
 
   @typep state :: %State{
            port: port(),
            pending: %{optional(request_id()) => %{client: GenServer.from()}},
-           pending_tasks: %{optional(Task.ref()) => request_id()}
+           pending_tasks: %{optional(Task.ref()) => request_id()},
+           encoding_opts: Snex.Serde.encoding_opts()
          }
 
   defmacro __using__(opts),
@@ -73,16 +74,17 @@ defmodule Snex.Interpreter do
           | {:init_script_timeout, timeout()}
           | {:sync_start?, boolean()}
           | {:label, term()}
+          | {:encoding_opts, Snex.Serde.encoding_opts()}
           | GenServer.option()
 
   @doc false
-  @spec command(server(), port(), command(), timeout()) ::
+  @spec command(server(), port(), command(), Snex.Serde.encoding_opts(), timeout()) ::
           {:ok, term()} | {:error, Snex.Error.t() | term()}
-  def command(interpreter, port, command, timeout) do
+  def command(interpreter, port, command, encoding_opts, timeout) do
     envs = Internal.Command.referenced_envs(command)
 
     id = generate_request_id()
-    encoded_command = encode_command(command, id)
+    encoded_command = encode_command(command, id, encoding_opts)
     request_id = :gen_server.send_request(interpreter, {:expect_reply, id})
     run_command(interpreter, port, encoded_command)
 
@@ -100,19 +102,25 @@ defmodule Snex.Interpreter do
   end
 
   @doc false
-  @spec command_noreply(server(), port(), request_id() | nil, command()) :: :ok
-  def command_noreply(interpreter, port, id \\ nil, command) do
+  @spec command_noreply(
+          server(),
+          port(),
+          request_id() | nil,
+          command(),
+          Snex.Serde.encoding_opts()
+        ) :: :ok
+  def command_noreply(interpreter, port, id \\ nil, command, encoding_opts) do
     envs = Internal.Command.referenced_envs(command)
     id = id || generate_request_id()
-    encoded_command = encode_command(command, id)
+    encoded_command = encode_command(command, id, encoding_opts)
     run_command(interpreter, port, encoded_command)
     Snex.Env.touch(envs)
   end
 
   @doc false
-  @spec get_port(server()) :: port()
-  def get_port(interpreter),
-    do: GenServer.call(interpreter, :get_port)
+  @spec get_settings(server()) :: %{port: port(), encoding_opts: Snex.Serde.encoding_opts()}
+  def get_settings(interpreter),
+    do: GenServer.call(interpreter, :get_settings)
 
   @doc """
   Returns the OS PID of the Python interpreter.
@@ -165,6 +173,10 @@ defmodule Snex.Interpreter do
       through `:proc_lib.set_label/1`. It will also be present in telemetry event metadata under
       `:interpreter_label` key.
 
+    - `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - Options for encoding Elixir terms
+      to a desired representation on the Python side. These settings will be used when encoding
+      terms for this interpreter, but can be overridden by individual commands.
+
     - any other options will be passed to `GenServer.start_link/3`.
   """
   @spec start_link([option()]) :: GenServer.on_start()
@@ -178,7 +190,8 @@ defmodule Snex.Interpreter do
         :init_script,
         :init_script_timeout,
         :sync_start?,
-        :label
+        :label,
+        :encoding_opts
       ])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
@@ -189,15 +202,16 @@ defmodule Snex.Interpreter do
           {:ok, state()} | {:ok, state(), {:continue, {:init, [option()]}}}
   def init(opts) do
     {label, opts} = Keyword.pop(opts, :label)
+    {encoding_opts, opts} = Keyword.pop(opts, :encoding_opts, [])
 
     if label != nil and function_exported?(:proc_lib, :set_label, 1),
       do: :proc_lib.set_label(label)
 
     with true <- !!Keyword.get(opts, :sync_start?, true),
          {:ok, port} <- init_python_port(opts) do
-      {:ok, %State{port: port}}
+      {:ok, %State{port: port, encoding_opts: encoding_opts}}
     else
-      false -> {:ok, %State{}, {:continue, {:init, opts}}}
+      false -> {:ok, %State{encoding_opts: encoding_opts}, {:continue, {:init, opts}}}
       {:error, reason} -> {:stop, reason}
     end
   end
@@ -213,10 +227,10 @@ defmodule Snex.Interpreter do
   end
 
   @impl GenServer
-  @spec handle_call(:get_port, GenServer.from(), state()) ::
-          {:reply, port(), state()}
-  def handle_call(:get_port, _from, %State{} = state),
-    do: {:reply, state.port, state}
+  @spec handle_call(:get_settings, GenServer.from(), state()) ::
+          {:reply, %{port: port(), encoding_opts: Snex.Serde.encoding_opts()}, state()}
+  def handle_call(:get_settings, _from, %State{} = state),
+    do: {:reply, %{port: state.port, encoding_opts: state.encoding_opts}, state}
 
   @spec handle_call(:os_pid, GenServer.from(), state()) ::
           {:reply, non_neg_integer(), state()}
@@ -281,7 +295,16 @@ defmodule Snex.Interpreter do
         :ok
 
       {:reply, result} ->
-        command_noreply(self(), state.port, id, %Commands.CallResponse{result: result})
+        command_noreply(
+          self(),
+          state.port,
+          id,
+          %Commands.CallResponse{result: result},
+          # as long as we don't let users control the encoding opts per Snex.Env,
+          # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
+          # we'll need here the env.encoding_opts of the task that called `snex.call`.
+          state.encoding_opts
+        )
     end
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
@@ -293,7 +316,7 @@ defmodule Snex.Interpreter do
 
     if id do
       command = %Commands.CallErrorResponse{reason: inspect(reason)}
-      command_noreply(self(), state.port, id, command)
+      command_noreply(self(), state.port, id, command, state.encoding_opts)
     end
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
@@ -350,7 +373,7 @@ defmodule Snex.Interpreter do
   defp run_init_script(port, opts) do
     command = %Commands.Init{code: opts[:init_script]}
     id = generate_request_id()
-    encoded_command = encode_command(command, id)
+    encoded_command = encode_command(command, id, Keyword.get(opts, :encoding_opts, []))
     run_command(self(), port, encoded_command)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
@@ -427,8 +450,8 @@ defmodule Snex.Interpreter do
   defp generate_request_id,
     do: :rand.bytes(16)
 
-  defp encode_command(command, id),
-    do: [id, @request, Command.encode(command)]
+  defp encode_command(command, id, encoding_opts),
+    do: [id, @request, Command.encode(command, encoding_opts)]
 
   defp call_or_cast(_command, m, f, a, node) when node in [nil, node()],
     do: apply(m, f, a)

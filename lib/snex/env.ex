@@ -27,17 +27,25 @@ defmodule Snex.Env do
           id: id(),
           ref: :erlang.nif_resource() | nil,
           port: port(),
-          interpreter: Snex.Interpreter.server()
+          interpreter: Snex.Interpreter.server(),
+          encoding_opts: Snex.Serde.encoding_opts()
         }
 
   @derive {Inspect, only: [:id]}
-  @enforce_keys [:id, :ref, :port, :interpreter]
-  defstruct [:id, :ref, :port, :interpreter]
+  @enforce_keys [:id, :ref, :port, :interpreter, :encoding_opts]
+  defstruct [:id, :ref, :port, :interpreter, :encoding_opts]
 
   @doc false
-  @spec make(id :: binary(), port(), Snex.Interpreter.server()) :: t()
-  def make(id, port, interpreter) do
-    env = %__MODULE__{id: id, ref: nil, port: port, interpreter: interpreter}
+  @spec make(id :: binary(), port(), Snex.Interpreter.server(), Snex.Serde.encoding_opts()) :: t()
+  def make(id, port, interpreter, encoding_opts) do
+    env = %__MODULE__{
+      id: id,
+      ref: nil,
+      port: port,
+      interpreter: interpreter,
+      encoding_opts: encoding_opts
+    }
+
     %__MODULE__{env | ref: EnvReferenceNif.make_ref(env)}
   end
 
@@ -70,10 +78,10 @@ defmodule Snex.Env do
 
   @doc false
   # This weird function makes sure the envs are not garbage collected before we're done using them.
-  # to the interpreter. BEAM turns out to be very aggressive about garbage collection in that
+  # BEAM turns out to be very aggressive about garbage collection in that
   # it can drop our Snex.Env.EnvReferenceNif resource as soon as it's no longer used, not waiting
   # until the end of the function.
-  @spec touch(envs :: list(t())) :: :ok
+  @spec touch([t()]) :: :ok
   def touch(envs) when is_list(envs),
     do: :ok
 end

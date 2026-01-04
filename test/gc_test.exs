@@ -46,7 +46,7 @@ defmodule Snex.GCTest do
       1 =
         :trace.function(
           session,
-          {Snex.Interpreter, :command_noreply, 3},
+          {Snex.Interpreter, :command_noreply, 4},
           [{:_, [], [{:return_trace}]}],
           [
             :meta
@@ -68,11 +68,12 @@ defmodule Snex.GCTest do
                            [
                              _interpreter,
                              _port,
-                             %Snex.Internal.Commands.GC{env: %Snex.Env{id: ^env_id}}
+                             %Snex.Internal.Commands.GC{env: %Snex.Env{id: ^env_id}},
+                             _encoding_opts
                            ]}, _ts}
 
           assert_receive {:trace_ts, ^gc_pid, :return_from,
-                          {Snex.Interpreter, :command_noreply, 3}, :ok, _ts}
+                          {Snex.Interpreter, :command_noreply, 4}, :ok, _ts}
 
           :trace.session_destroy(session)
         end)
