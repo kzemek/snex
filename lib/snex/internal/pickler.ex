@@ -4,7 +4,7 @@ defmodule Snex.Internal.Pickler do
   import Bitwise
   import Record, only: [defrecord: 3, is_record: 2]
 
-  alias __MODULE__.{Object, Binary}
+  alias __MODULE__.{Object, Binary, Float}
   alias Snex.Serde
 
   @start <<0x80>>
@@ -57,11 +57,9 @@ defmodule Snex.Internal.Pickler do
   @atom_class "snex.models\nAtom\n"
   @term_class "snex.models\nTerm\n"
 
-  @float_map %{
-    inf: <<@binfloat::binary, 127, 240, 0, 0, 0, 0, 0, 0>>,
-    "-inf": <<@binfloat::binary, 255, 240, 0, 0, 0, 0, 0, 0>>,
-    nan: <<@binfloat::binary, 127, 248, 0, 0, 0, 0, 0, 0>>
-  }
+  @float_inf_encoded <<@binfloat::binary, 127, 240, 0, 0, 0, 0, 0, 0>>
+  @float_neginf_encoded <<@binfloat::binary, 255, 240, 0, 0, 0, 0, 0, 0>>
+  @float_nan_encoded <<@binfloat::binary, 127, 248, 0, 0, 0, 0, 0, 0>>
 
   defrecord :object, Object, [:module, :classname, :args]
   @type record_object :: record(:object, module: String.t(), classname: String.t(), args: list())
@@ -104,7 +102,7 @@ defmodule Snex.Internal.Pickler do
   end
 
   defp encode_integer(i) when i in 0..0xFF,
-    do: [@binint1, <<i>>]
+    do: [@binint1, i]
 
   defp encode_integer(i) when i in 0..0xFFFF,
     do: [@binint2, <<i::little-unsigned-16>>]
@@ -113,20 +111,23 @@ defmodule Snex.Internal.Pickler do
     do: [@binint, <<i::little-signed-32>>]
 
   defp encode_integer(i) do
-    bytes = signed_to_binary(i)
+    {bytes, byte_size} = signed_to_binary(i)
 
-    case byte_size(bytes) do
-      size when size <= 0xFF -> [@long1, <<size>>, bytes]
-      size when size <= 0xFFFF_FFFF -> [@long4, <<size::little-unsigned-32>>, bytes]
-      size -> raise ArgumentError, "integer too large: #{size} bytes"
+    cond do
+      byte_size <= 0xFF -> [@long1, byte_size, bytes]
+      byte_size <= 0xFFFF_FFFF -> [@long4, <<byte_size::little-unsigned-32>>, bytes]
+      true -> raise ArgumentError, "integer too large: #{byte_size} bytes"
     end
   end
 
-  defp encode_float(float(value: value)) when is_atom(value),
-    do: Map.fetch!(@float_map, value)
-
-  defp encode_float(float(value: value)),
-    do: encode_float(value)
+  defp encode_float(float(value: value)) do
+    case value do
+      :inf -> @float_inf_encoded
+      :"-inf" -> @float_neginf_encoded
+      :nan -> @float_nan_encoded
+      f -> encode_float(f)
+    end
+  end
 
   defp encode_float(f),
     do: [@binfloat, <<f::64-float>>]
@@ -135,7 +136,7 @@ defmodule Snex.Internal.Pickler do
     do: encode_bytes(b)
 
   defp encode_bytes(b) do
-    case IO.iodata_length(b) do
+    case iodata_size(b) do
       size when size <= 0xFF -> [@short_binbytes, size, b]
       size when size <= 0xFFFFFFFF -> [@binbytes, <<size::little-unsigned-32>>, b]
       size when size <= 0xFFFFFFFF_FFFFFFFF -> [@binbytes8, <<size::little-unsigned-64>>, b]
@@ -153,16 +154,16 @@ defmodule Snex.Internal.Pickler do
   end
 
   defp encode_object(object(module: module, classname: classname, args: args)),
-    do: [@global, "#{module}\n#{classname}\n", encode_tuple(args), @reduce]
+    do: [@global, module, "\n", classname, "\n", encode_tuple(args), @reduce]
 
   defp encode_list(l),
-    do: [@mark, Enum.map(l, &do_encode/1), @list]
+    do: [@mark, encode_list_elems(l), @list]
 
   defp encode_tuple(t) do
     elems =
       if is_list(t),
-        do: Enum.map(t, &do_encode/1),
-        else: Enum.map(0..(tuple_size(t) - 1)//1, &do_encode(elem(t, &1)))
+        do: encode_list_elems(t),
+        else: encode_tuple_elems(t)
 
     case elems do
       [] -> @empty_tuple
@@ -174,7 +175,7 @@ defmodule Snex.Internal.Pickler do
   end
 
   defp encode_set(s),
-    do: [@empty_set, @mark, Enum.map(s, &do_encode/1), @additems]
+    do: [@empty_set, @mark, encode_set_elems(s), @additems]
 
   # We don't ship with any Snex.Serde.Encoder implementations, so Dialyzer complains the `case`
   # is always nil
@@ -192,34 +193,56 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  defp encode_map(map) do
-    {map, struct_keys} =
-      case map do
-        %struct{} -> {Map.from_struct(map), [encode_atom(:__struct__), encode_atom(struct)]}
-        _ -> {map, []}
-      end
-
-    [
-      @empty_dict,
-      @mark,
-      struct_keys,
-      Enum.map(map, fn {k, v} -> [do_encode(k), do_encode(v)] end),
-      @setitems
-    ]
-  end
+  defp encode_map(map),
+    do: [@empty_dict, @mark, encode_map_elems(map), @setitems]
 
   defp encode_term(term),
-    do: [[@global, @term_class], encode_bytes(:erlang.term_to_binary(term)), @tuple1, @reduce]
+    do: [@global, @term_class, encode_bytes(:erlang.term_to_binary(term)), @tuple1, @reduce]
 
-  defp signed_to_binary(i) do
+  defp signed_to_binary(i) when i >= 0 do
+    bytes = :binary.encode_unsigned(i, :little)
+
+    if :binary.last(bytes) > 127,
+      # If the MSB has the highest bit set, we need one more byte to represent the sign
+      do: {[bytes, 0], byte_size(bytes) + 1},
+      else: {bytes, byte_size(bytes)}
+  end
+
+  defp signed_to_binary(i) when i < 0 do
     bytes_num =
-      case :binary.encode_unsigned((i < 0 && bnot(i)) || i) do
-        <<>> -> 1
+      case i |> bnot() |> :binary.encode_unsigned() do
         # If the MSB has the highest bit set, we need one more byte to represent the sign
         <<1::1, _::bitstring>> = magnitude -> byte_size(magnitude) + 1
         magnitude -> byte_size(magnitude)
       end
 
-    <<i::little-signed-unit(8)-size(bytes_num)>>
+    {<<i::little-signed-unit(8)-size(bytes_num)>>, bytes_num}
   end
+
+  defp encode_list_elems(list),
+    do: list |> do_encode_list_elems([]) |> Enum.reverse()
+
+  defp encode_tuple_elems(tuple),
+    do: tuple |> Tuple.to_list() |> do_encode_list_elems([]) |> Enum.reverse()
+
+  defp encode_set_elems(set),
+    do: set |> MapSet.to_list() |> do_encode_list_elems([])
+
+  defp encode_map_elems(map),
+    do: map |> Map.to_list() |> do_encode_map_elems([])
+
+  defp do_encode_list_elems([], acc),
+    do: acc
+
+  defp do_encode_list_elems([elem | rest], acc),
+    do: do_encode_list_elems(rest, [do_encode(elem) | acc])
+
+  defp do_encode_map_elems([], acc),
+    do: acc
+
+  defp do_encode_map_elems([{k, v} | rest], acc),
+    do: do_encode_map_elems(rest, [do_encode(k), do_encode(v) | acc])
+
+  defp iodata_size(b),
+    do: if(is_binary(b), do: byte_size(b), else: IO.iodata_length(b))
 end
