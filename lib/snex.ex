@@ -152,7 +152,9 @@ defmodule Snex do
         _ -> Snex.Interpreter.get_port(interpreter)
       end
 
-    Snex.Interpreter.command(interpreter, port, command, :infinity)
+    with {:ok, env_id} <-
+           Snex.Interpreter.command(interpreter, port, command, :infinity),
+         do: {:ok, Snex.Env.make(env_id, port, interpreter)}
   end
 
   @doc """

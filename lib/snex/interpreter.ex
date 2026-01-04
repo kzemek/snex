@@ -89,7 +89,7 @@ defmodule Snex.Interpreter do
     case :gen_server.receive_response(request_id, timeout) do
       {:reply, reply} ->
         Snex.Env.touch(envs)
-        decode_reply(reply, port, interpreter)
+        decode_reply(reply)
 
       :timeout ->
         {:error, Snex.Error.exception(code: :response_timeout)}
@@ -357,7 +357,7 @@ defmodule Snex.Interpreter do
 
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response, port, self())
+        :ok = decode_reply(response)
 
       {^port, {:exit_status, _status} = reason} ->
         {:error, Snex.Error.exception(code: :interpreter_exited, reason: reason)}
@@ -383,10 +383,10 @@ defmodule Snex.Interpreter do
     :ok
   end
 
-  defp decode_reply(data, port, interpreter) do
+  defp decode_reply(data) do
     case Snex.Serde.decode(data) do
       {:ok, reply} ->
-        reply_to_result(reply, port, interpreter)
+        reply_to_result(reply)
 
       {:error, reason} ->
         error =
@@ -399,13 +399,10 @@ defmodule Snex.Interpreter do
     end
   end
 
-  defp reply_to_result(reply, port, interpreter) do
+  defp reply_to_result(reply) do
     case reply do
       %{"status" => "ok"} ->
         :ok
-
-      %{"status" => "ok_env", "id" => env_id} ->
-        {:ok, Snex.Env.make(env_id, port, interpreter)}
 
       %{"status" => "ok_value", "value" => value} ->
         {:ok, value}

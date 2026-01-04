@@ -21,7 +21,6 @@ from .models import (
     InRequest,
     InResponse,
     MakeEnvCommand,
-    OkEnvResponse,
     OkResponse,
     OkValueResponse,
     OutResponse,
@@ -52,7 +51,7 @@ async def run_init(cmd: InitCommand) -> OkResponse:
     return OkResponse(status="ok")
 
 
-def run_make_env(cmd: MakeEnvCommand) -> OkEnvResponse | ErrorResponse:
+def run_make_env(cmd: MakeEnvCommand) -> OkValueResponse | ErrorResponse:
     env = root_env.copy()
 
     for from_env_cmd in cmd["from_env"]:
@@ -80,7 +79,7 @@ def run_make_env(cmd: MakeEnvCommand) -> OkEnvResponse | ErrorResponse:
     env_id = EnvID(generate_id())
     envs[env_id] = env
 
-    return OkEnvResponse(status="ok_env", id=env_id)
+    return OkValueResponse(status="ok_value", value=env_id)
 
 
 async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResponse:

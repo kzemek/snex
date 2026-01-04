@@ -59,11 +59,6 @@ class OkResponse(TypedDict):
     status: Literal["ok"]
 
 
-class OkEnvResponse(TypedDict):
-    status: Literal["ok_env"]
-    id: EnvID
-
-
 class OkValueResponse(TypedDict):
     status: Literal["ok_value"]
     value: Any
@@ -116,4 +111,4 @@ class ErrorResponse(TypedDict):
 InRequest = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
 InResponse = CallResponse | CallErrorResponse
 OutRequest = SendCommand | CallCommand | CastCommand
-OutResponse = OkResponse | OkEnvResponse | OkValueResponse | ErrorResponse
+OutResponse = OkResponse | OkValueResponse | ErrorResponse
