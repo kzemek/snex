@@ -38,14 +38,14 @@ end
 ```
 
 ```elixir
-{:ok, inp} = SnexTest.NumpyInterpreter.start_link()
+{:ok, inp} = SnexTest.NumpyInterpreter.start_link(init_script: "import numpy as np")
 {:ok, env} = Snex.make_env(inp)
 
-{:ok, 6.0} =
+{:ok, 4.242640687119285} =
   Snex.pyeval(env, """
-    import numpy as np
-    matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (s, s), dtype=int)
-    """, %{"s" => 6}, returning: "np.linalg.norm(matrix)")
+    width = await snex.call("Elixir.Kernel", "div", [height, 2])
+    matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (width, height), dtype=int)
+    """, %{"height" => 6}, returning: "np.linalg.norm(matrix)")
 ```
 
 ## Installation & Requirements
