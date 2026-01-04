@@ -5,7 +5,7 @@ defmodule Snex do
                ~r/.*?Quick example\n(.*?)## Installation & Requirements\n.*?(?=### Custom Interpreter)/s,
                "\\1"
              )
-             |> String.replace(~r/^#/m, "")
+             |> String.replace(~r/^##/m, "#")
              |> String.replace("](#", "](#module-")
              |> String.replace("> [!WARNING]", "> #### Warning {: .warning}")
              |> String.replace("> [!IMPORTANT]", "> #### Important {: .info}")
