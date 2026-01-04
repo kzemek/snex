@@ -40,6 +40,7 @@ defmodule Snex.Internal.Pickler do
   @empty_set <<0x8F>>
   @list "l"
   @setitems "u"
+  @frozenset <<0x91>>
 
   # booleans
   @newfalse <<0x89>>
@@ -74,12 +75,15 @@ defmodule Snex.Internal.Pickler do
   defrecordp :fragment, Fragment, [:iodata]
   @opaque record_fragment :: record(:fragment, iodata: iodata())
 
-  defrecordp :encoding_opts, binary_as: :str
+  defrecordp :encoding_opts, binary_as: :str, set_as: :set
 
   defp make_encoding_opts(opts) do
     List.foldl(opts, encoding_opts(), fn
       {:binary_as, value}, acc when value in [:str, :bytes, :bytearray] ->
         encoding_opts(acc, binary_as: value)
+
+      {:set_as, value}, acc when value in [:set, :frozenset] ->
+        encoding_opts(acc, set_as: value)
 
       {key, value}, _acc ->
         raise ArgumentError,
@@ -211,8 +215,12 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  defp encode_set(s, opts),
-    do: [@empty_set, @mark, encode_set_elems(s, opts), @additems]
+  defp encode_set(s, opts) do
+    case encoding_opts(opts, :set_as) do
+      :set -> [@empty_set, @mark, encode_set_elems(s, opts), @additems]
+      :frozenset -> [@mark, encode_set_elems(s, opts), @frozenset]
+    end
+  end
 
   # We don't ship with any Snex.Serde.Encoder implementations, so Dialyzer complains the `case`
   # is always nil

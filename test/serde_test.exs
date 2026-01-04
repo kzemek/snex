@@ -252,10 +252,10 @@ defmodule Snex.SerdeTest do
     end
 
     test "is encoded according to `encoding_opts`" do
-      interpreter = start_link_supervised!({Snex.Interpreter, encoding_opts: [binary_as: :bytes]})
-      {:ok, env} = Snex.make_env(interpreter, %{"var_default" => "hello"})
-
       bin = "hello"
+
+      interpreter = start_link_supervised!({Snex.Interpreter, encoding_opts: [binary_as: :bytes]})
+      {:ok, env} = Snex.make_env(interpreter, %{"var_default" => bin})
 
       env =
         Enum.reduce([:str, :bytes, :bytearray], env, fn type, env ->
@@ -475,6 +475,48 @@ defmodule Snex.SerdeTest do
                Snex.pyeval(env, %{"s" => MapSet.new()},
                  returning: "type(s) is set and s == set()"
                )
+    end
+
+    test "is encoded according to `encoding_opts`" do
+      set = MapSet.new([1, 2, 3])
+
+      interpreter =
+        start_link_supervised!({Snex.Interpreter, encoding_opts: [set_as: :frozenset]})
+
+      {:ok, env} = Snex.make_env(interpreter, %{"var_default" => set})
+
+      env =
+        Enum.reduce([:set, :frozenset], env, fn type, env ->
+          {:ok, env} =
+            Snex.make_env(%{"var_#{type}" => set}, from: env, encoding_opts: [set_as: type])
+
+          env
+        end)
+
+      # interpreter default
+      assert {:ok, true} =
+               Snex.pyeval(env, %{"s" => set},
+                 returning: "type(s) is frozenset and s == {1, 2, 3}"
+               )
+
+      assert {:ok, true} =
+               Snex.pyeval(env,
+                 returning: "type(var_default) is frozenset and var_default == {1, 2, 3}"
+               )
+
+      for type <- [:set, :frozenset] do
+        assert {:ok, true} =
+                 Snex.pyeval(env, %{"s" => set},
+                   encoding_opts: [set_as: type],
+                   returning: "type(s) is #{type} and s == {1, 2, 3}"
+                 )
+
+        assert {:ok, true} =
+                 Snex.pyeval(env,
+                   encoding_opts: [set_as: type],
+                   returning: "type(var_#{type}) is #{type} and var_#{type} == {1, 2, 3}"
+                 )
+      end
     end
   end
 

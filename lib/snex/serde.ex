@@ -16,6 +16,7 @@ defmodule Snex.Serde do
 
   @type encoding_opt ::
           {:binary_as, :str | :bytes | :bytearray}
+          | {:set_as, :set | :frozenset}
 
   @typedoc """
   Options for encoding Elixir terms to a desired representation on the Python side.
@@ -25,6 +26,10 @@ defmodule Snex.Serde do
     - `:str` encodes binary as `str`
     - `:bytes` encodes binary as `bytes`
     - `:bytearray` encodes binary as `bytearray`
+
+  - `set_as`: The representation of sets on the Python side. Defaults to `:set`.
+    - `:set` encodes `MapSet` as `set`
+    - `:frozenset` encodes `MapSet` as `frozenset`
   """
   @type encoding_opts :: [encoding_opt()]
 
