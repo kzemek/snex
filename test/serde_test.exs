@@ -74,6 +74,18 @@ defmodule Snex.SerdeTest do
                )
     end
 
+    test "does not conflict with string map keys when `:distinct_atom` is used", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(env, %{"x" => %{"a" => "hello", a: :world}},
+                 encoding_opts: [atom_as: :distinct_atom],
+                 returning: """
+                 len(x) == 2 \
+                 and x['a'] == 'hello' \
+                 and x[snex.DistinctAtom('a')] == snex.DistinctAtom('world')\
+                 """
+               )
+    end
+
     test "can be more than 255 bytes long", %{env: env} do
       atom_str = String.duplicate("ź", 255)
       assert byte_size(atom_str) > 255
@@ -82,6 +94,59 @@ defmodule Snex.SerdeTest do
                Snex.pyeval(env, %{"a" => String.to_atom(atom_str)},
                  returning: "type(a) is snex.Atom and len(a) == 255"
                )
+    end
+
+    test "is encoded according to `encoding_opts`" do
+      atom = :hello
+
+      interpreter =
+        start_link_supervised!({Snex.Interpreter, encoding_opts: [atom_as: :distinct_atom]})
+
+      {:ok, env} = Snex.make_env(interpreter, %{"var_default" => atom})
+
+      env =
+        Enum.reduce([:atom, :distinct_atom], env, fn type, env ->
+          {:ok, env} =
+            Snex.make_env(%{"var_#{type}" => atom}, from: env, encoding_opts: [atom_as: type])
+
+          env
+        end)
+
+      # interpreter default
+      assert {:ok, true} =
+               Snex.pyeval(env, %{"a" => atom},
+                 returning: """
+                 type(a) is snex.DistinctAtom \
+                 and a == snex.DistinctAtom('hello') \
+                 and a != 'hello'\
+                 """
+               )
+
+      assert {:ok, true} =
+               Snex.pyeval(env,
+                 returning: """
+                 type(var_default) is snex.DistinctAtom \
+                 and var_default == snex.DistinctAtom('hello') \
+                 and var_default != 'hello'\
+                 """
+               )
+
+      for {as, {type, expected}} <- [
+            atom: {"snex.Atom", "'hello'"},
+            distinct_atom: {"snex.DistinctAtom", "snex.DistinctAtom('hello')"}
+          ] do
+        assert {:ok, true} =
+                 Snex.pyeval(env, %{"a" => atom},
+                   encoding_opts: [atom_as: as],
+                   returning: "type(a) is #{type} and a == #{expected}"
+                 )
+
+        assert {:ok, true} =
+                 Snex.pyeval(env,
+                   encoding_opts: [atom_as: as],
+                   returning: "type(var_#{as}) is #{type} and var_#{as} == #{expected}"
+                 )
+      end
     end
   end
 

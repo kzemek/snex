@@ -17,6 +17,7 @@ defmodule Snex.Serde do
   @type encoding_opt ::
           {:binary_as, :str | :bytes | :bytearray}
           | {:set_as, :set | :frozenset}
+          | {:atom_as, :atom | :distinct_atom}
 
   @typedoc """
   Options for encoding Elixir terms to a desired representation on the Python side.
@@ -30,6 +31,12 @@ defmodule Snex.Serde do
   - `set_as`: The representation of sets on the Python side. Defaults to `:set`.
     - `:set` encodes `MapSet` as `set`
     - `:frozenset` encodes `MapSet` as `frozenset`
+
+  - `atom_as`: The representation of atoms on the Python side. Defaults to `:atom`.
+    - `:atom` encodes atom as `snex.Atom`, which inherits and equals `str`
+    - `:distinct_atom` encodes atom as `snex.DistinctAtom`, which does inherit from `str` but
+      is not equal, i.e. `"foo" != snex.DistinctAtom("foo")`. This helps when encoding a map with
+      both `"foo"` and `:foo` keys
   """
   @type encoding_opts :: [encoding_opt()]
 

@@ -57,6 +57,7 @@ defmodule Snex.Internal.Pickler do
   @tuple "t"
 
   @atom_class "snex.models\nAtom\n"
+  @distinct_atom_class "snex.models\nDistinctAtom\n"
   @term_class "snex.models\nTerm\n"
 
   @float_inf_encoded <<@binfloat::binary, 127, 240, 0, 0, 0, 0, 0, 0>>
@@ -75,7 +76,7 @@ defmodule Snex.Internal.Pickler do
   defrecordp :fragment, Fragment, [:iodata]
   @opaque record_fragment :: record(:fragment, iodata: iodata())
 
-  defrecordp :encoding_opts, binary_as: :str, set_as: :set
+  defrecordp :encoding_opts, binary_as: :str, set_as: :set, atom_as: :atom
 
   defp make_encoding_opts(opts) do
     List.foldl(opts, encoding_opts(), fn
@@ -84,6 +85,9 @@ defmodule Snex.Internal.Pickler do
 
       {:set_as, value}, acc when value in [:set, :frozenset] ->
         encoding_opts(acc, set_as: value)
+
+      {:atom_as, value}, acc when value in [:atom, :distinct_atom] ->
+        encoding_opts(acc, atom_as: value)
 
       {key, value}, _acc ->
         raise ArgumentError,
@@ -101,7 +105,7 @@ defmodule Snex.Internal.Pickler do
 
   defp do_encode(n, _opts) when is_nil(n), do: encode_nil()
   defp do_encode(b, _opts) when is_boolean(b), do: encode_boolean(b)
-  defp do_encode(a, _opts) when is_atom(a), do: encode_atom(a)
+  defp do_encode(a, opts) when is_atom(a), do: encode_atom(a, opts)
   defp do_encode(i, _opts) when is_integer(i), do: encode_integer(i)
   defp do_encode(f, _opts) when is_float(f), do: encode_float(f)
   defp do_encode(s, opts) when is_binary(s), do: encode_binary(s, opts)
@@ -122,9 +126,13 @@ defmodule Snex.Internal.Pickler do
   defp encode_boolean(b),
     do: if(b, do: @newtrue, else: @newfalse)
 
-  defp encode_atom(a) do
+  defp encode_atom(a, opts) do
     encoded = a |> Atom.to_string() |> encode_string()
-    [@global, @atom_class, encoded, @tuple1, @reduce]
+
+    case encoding_opts(opts, :atom_as) do
+      :atom -> [@global, @atom_class, encoded, @tuple1, @reduce]
+      :distinct_atom -> [@global, @distinct_atom_class, encoded, @tuple1, @reduce]
+    end
   end
 
   defp encode_integer(i) when i in 0..0xFF,

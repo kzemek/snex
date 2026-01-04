@@ -18,7 +18,23 @@ class Atom(str):
     __slots__ = ()
 
     def __repr__(self) -> str:
-        return f"snex.Atom({super().__repr__()})"
+        return f"snex.Atom({self!s})"
+
+
+class DistinctAtom(Atom):
+    __slots__ = ()
+
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and super().__eq__(other)
+
+    def __ne__(self, other: object) -> bool:
+        return type(self) is not type(other) or super().__ne__(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), str(self)))
+
+    def __repr__(self) -> str:
+        return f"snex.DistinctAtom({self!s})"
 
 
 class Term(bytes):

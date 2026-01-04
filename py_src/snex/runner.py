@@ -100,17 +100,8 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResp
         await run_code(cmd["code"], env)
 
     if cmd["returning"]:
-        try:
-            value = eval(cmd["returning"], env, env)  # noqa: S307
-            return OkValueResponse(status="ok_value", value=value)
-        except KeyError as e:
-            key = e.args[0]
-            env_id_str = env_id_to_str(env_id)
-            return ErrorResponse(
-                status="error",
-                code="env_key_not_found",
-                reason=f"Key {key} not found in environment {env_id_str}",
-            )
+        value = eval(cmd["returning"], env, env)  # noqa: S307
+        return OkValueResponse(status="ok_value", value=value)
 
     return OkResponse(status="ok")
 
