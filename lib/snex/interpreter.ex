@@ -292,10 +292,8 @@ defmodule Snex.Interpreter do
     {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
 
     if id do
-      Logger.warning("Call (id: #{Base.encode64(id)}) failed on Elixir side: #{inspect(reason)}")
-      # Once we add a setting to encode binaries as bytes by default, we will be safe to
-      # include the whole `reason` in the error response, as it will virtually always encode.
-      command_noreply(self(), state.port, id, %Commands.CallErrorResponse{})
+      command = %Commands.CallErrorResponse{reason: inspect(reason)}
+      command_noreply(self(), state.port, id, command)
     end
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}

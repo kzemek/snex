@@ -2,8 +2,6 @@ defmodule SnexTest do
   use ExUnit.Case, async: true
   use MarkdownDoctest
 
-  import ExUnit.CaptureLog
-
   markdown_doctest "README.md",
     except:
       &String.contains?(&1, [
@@ -93,17 +91,17 @@ defmodule SnexTest do
                )
     end
 
+    @tag capture_log: true
     test "call raises ElixirError when Elixir function raises", %{env: env} do
-      assert {{:error, %Snex.Error{code: :python_runtime_error, reason: reason}}, log} =
-               with_log(fn ->
-                 Snex.pyeval(
-                   env,
-                   "await snex.call(snex.Atom('Elixir.Kernel'), snex.Atom('div'), [10, 0])"
-                 )
-               end)
+      assert {:error, %Snex.Error{code: :python_runtime_error, reason: reason}} =
+               Snex.pyeval(
+                 env,
+                 "await snex.call(snex.Atom('Elixir.Kernel'), snex.Atom('div'), [10, 0])"
+               )
 
       assert reason =~ "failed on Elixir side"
-      assert log =~ "bad argument in arithmetic expression"
+      assert reason =~ ":badarith"
+      assert reason =~ ":erlang, :div, [10, 0]"
     end
 
     test "can handle multiple concurrent calls", %{env: env} do

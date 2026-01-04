@@ -161,10 +161,10 @@ end
 defmodule Snex.Internal.Commands.CallErrorResponse do
   @moduledoc false
 
-  @type t :: %__MODULE__{}
+  @type t :: %__MODULE__{reason: String.t()}
 
-  @enforce_keys []
-  defstruct []
+  @enforce_keys [:reason]
+  defstruct [:reason]
 
   defimpl Snex.Internal.Command do
     @impl Snex.Internal.Command
@@ -172,9 +172,10 @@ defmodule Snex.Internal.Commands.CallErrorResponse do
       do: []
 
     @impl Snex.Internal.Command
-    def encode(%@for{}) do
+    def encode(%@for{} = command) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "call_error_response"
+        "command" => "call_error_response",
+        "reason" => command.reason
       })
     end
   end

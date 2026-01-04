@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import threading
 from asyncio import AbstractEventLoop
 from typing import Any
@@ -15,7 +14,9 @@ _call_futures: dict[bytes, tuple[asyncio.Future[Any], AbstractEventLoop, int]] =
 
 
 class ElixirError(Exception):
-    pass
+    def __init__(self, req_id: bytes, reason: str) -> None:
+        msg = f"Call (id: {list(req_id)!r}) failed on Elixir side with reason: {reason}"
+        super().__init__(msg)
 
 
 def init(writer: asyncio.WriteTransport) -> None:
@@ -151,8 +152,7 @@ def on_call_response(
         else:
             loop.call_soon_threadsafe(future.set_result, data["result"])
     else:
-        msg = f"Call (id: {base64.b64encode(req_id).decode()}) failed on Elixir side"
-        exc = ElixirError(msg)
+        exc = ElixirError(req_id, data["reason"])
         if threading.get_ident() == thread_id:
             future.set_exception(exc)
         else:

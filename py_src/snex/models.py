@@ -98,6 +98,7 @@ class CallResponse(TypedDict):
 
 class CallErrorResponse(TypedDict):
     command: Literal["call_error_response"]
+    reason: str
 
 
 class ErrorResponse(TypedDict):
