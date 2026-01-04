@@ -257,30 +257,34 @@ Python data is serialized with a subset of Erlang's External Term Format, and de
 
 The serialization happens as outlined in the table:
 
-| (from) Elixir                | (to) Python     | (to) Elixir  | Comment                                                  |
-| ---------------------------- | --------------- | ------------ | -------------------------------------------------------- |
-| `nil`                        | `None`          | `nil`        |                                                          |
-| `boolean()`                  | `boolean`       | `boolean()`  |                                                          |
-| `atom()`                     | `snex.Atom`     | `atom()`     | `snex.Atom` is a subclass of `str`                       |
-| `integer()`                  | `int`           | `integer()`  | BigInts up to 2^32 bytes                                 |
-| `float()`                    | `float`         | `float()`    | Preserves representation                                 |
-| `Snex.Serde.float(:inf)`     | `float('inf')`  | `:inf`       | See `Snex.Serde.float/1`                                 |
-| `Snex.Serde.float(:"-inf")`  | `float('-inf')` | `:"-inf"`    |                                                          |
-| `Snex.Serde.float(:nan)`     | `float('NaN')`  | `:nan`       |                                                          |
-| `Snex.Serde.float(f)`        | `float`         | `f`          | Non-special float decodes to bare float                  |
-| `binary()`                   | `str`           | `binary()`   | Elixir binaries are assumed to be strings                |
-| `Snex.Serde.binary(b)`       | `bytes`         | `binary()`   |                                                          |
-|                              | `bytearray`     | `binary()`   |                                                          |
-|                              | `memoryview`    | `binary()`   |                                                          |
-| `Snex.Serde.object(m, n, a)` | `object`        |              | See `Snex.Serde.object/3`                                |
-| `Snex.Serde.term(t)`         | `snex.Term`     | `t`          | Opaquely round-trips `t`; `snex.Term` subclasses `bytes` |
-| `MapSet.t()`                 | `set`           | `MapSet.t()` |                                                          |
-|                              | `frozenset`     | `MapSet.t()` |                                                          |
-| `struct()`                   | `dict`          | `struct()`   | K/V pairs (including `__struct__`) recursively encoded   |
-| `map()`                      | `dict`          | `map()`      | K/V pairs recursively encoded                            |
-| `list()`                     | `list`          | `list()`     | Elements recursively encoded                             |
-| `tuple()`                    | `tuple`         | `tuple()`    | Elements recursively encoded                             |
-| `any()`                      | `snex.Term`     | `any()`      | Round-tripped with `:erlang.term_to_binary/1`            |
+| (from) Elixir                      | (to) Python     | (to) Elixir  | Comment                                                  |
+| ---------------------------------- | --------------- | ------------ | -------------------------------------------------------- |
+| `nil`                              | `None`          | `nil`        |                                                          |
+| `boolean()`                        | `boolean`       | `boolean()`  |                                                          |
+| `atom()`                           | `snex.Atom`     | `atom()`     | `snex.Atom` is a subclass of `str`                       |
+| `integer()`                        | `int`           | `integer()`  | BigInts up to 2^32 bytes                                 |
+| `float()`                          | `float`         | `float()`    | Preserves representation                                 |
+| `Snex.Serde.float(:inf)`           | `float('inf')`  | `:inf`       | See `Snex.Serde.float/1`                                 |
+| `Snex.Serde.float(:"-inf")`        | `float('-inf')` | `:"-inf"`    |                                                          |
+| `Snex.Serde.float(:nan)`           | `float('NaN')`  | `:nan`       |                                                          |
+| `Snex.Serde.float(f)`              | `float`         | `f`          | Non-special float decodes to bare float                  |
+| `binary()`                         | `str`           | `binary()`   | Elixir binaries are assumed to be strings                |
+| `binary()`                         | `bytes`         | `binary()`   | &emsp;↳ default is customizable with `encoding_opts`     |
+| `binary()`                         | `bytearray`     | `binary()`   | &emsp;↳ see `t:Snex.Serde.encoding_opts/0`               |
+| `Snex.Serde.binary(b)`             | `bytes`         | `binary()`   |                                                          |
+| `Snex.Serde.binary(b, :str)`       | `str`           | `binary()`   |                                                          |
+| `Snex.Serde.binary(b, :bytes)`     | `bytes`         | `binary()`   |                                                          |
+| `Snex.Serde.binary(b, :bytearray)` | `bytearray`     | `binary()`   |                                                          |
+|                                    | `memoryview`    | `binary()`   |                                                          |
+| `Snex.Serde.object(m, n, a)`       | `object`        |              | See `Snex.Serde.object/3`                                |
+| `Snex.Serde.term(t)`               | `snex.Term`     | `t`          | Opaquely round-trips `t`; `snex.Term` subclasses `bytes` |
+| `MapSet.t()`                       | `set`           | `MapSet.t()` |                                                          |
+|                                    | `frozenset`     | `MapSet.t()` |                                                          |
+| `struct()`                         | `dict`          | `struct()`   | K/V pairs (including `__struct__`) recursively encoded   |
+| `map()`                            | `dict`          | `map()`      | K/V pairs recursively encoded                            |
+| `list()`                           | `list`          | `list()`     | Elements recursively encoded                             |
+| `tuple()`                          | `tuple`         | `tuple()`    | Elements recursively encoded                             |
+| `any()`                            | `snex.Term`     | `any()`      | Round-tripped with `:erlang.term_to_binary/1`            |
 
 > [!WARNING]
 >
@@ -295,6 +299,9 @@ You can control struct encoding by implementing `Snex.Serde.Encoder` protocol.
 `Snex.Serde.Encoder.encode/1` will be called for any struct not explicitly handled in the table above, iif it implements the `Snex.Serde.Encoder` protocol.
 The result of the `encode/1` function will then be encoded again according to the table, with the same `Snex.Serde.Encoder` treatment if that result contains a struct.
 If `encode/1` returns the same struct type (e.g. `Snex.Serde.Encoder.encode(%X{}) -> %X{}`), the result will be encoded like a generic struct (i.e. as a `dict` with `__struct__` key).
+
+Additionally, encoding defaults can be set for `Snex.Interpreter` and its derivatives through the `encoding_opts` (`Snex.Serde.encoding_opts/0`) option to `Snex.Interpreter.start_link/1`.
+The same option can be given to `Snex.make_env/3` and `Snex.pyeval/4` to selectively influence encoding of passed `additional_vars`.
 
 On the Python side, you can call `snex.set_custom_encoder(encoder_fun)` to add encoders for your objects.
 `encoder_fun` will only be called for objects that `Snex` doesn't know how to serialize.

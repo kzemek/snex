@@ -232,7 +232,7 @@ defmodule Snex.SerdeTest do
   end
 
   describe "Elixir binary" do
-    test "is encoded as Python str", %{env: env} do
+    test "is encoded as Python str by default", %{env: env} do
       for strlen <- [0, 1, 255, 256] do
         str = String.duplicate("a", strlen)
 
@@ -241,14 +241,56 @@ defmodule Snex.SerdeTest do
       end
     end
 
-    test "round-trips unicode", %{env: env} do
+    test "round-trips unicode by default", %{env: env} do
       s = "zażółć gęślą jaźń"
       assert {:ok, ^s} = Snex.pyeval(env, %{"s" => s}, returning: "s")
     end
 
-    test "breaks when non-UTF8", %{env: env} do
+    test "breaks when non-UTF8 by default", %{env: env} do
       assert {:error, %Snex.Error{code: :python_runtime_error}} =
                Snex.pyeval(env, %{"s" => <<0xFF>>}, returning: "s")
+    end
+
+    test "is encoded according to `encoding_opts`" do
+      interpreter = start_link_supervised!({Snex.Interpreter, encoding_opts: [binary_as: :bytes]})
+      {:ok, env} = Snex.make_env(interpreter, %{"var_default" => "hello"})
+
+      bin = "hello"
+
+      env =
+        Enum.reduce([:str, :bytes, :bytearray], env, fn type, env ->
+          {:ok, env} =
+            Snex.make_env(%{"var_#{type}" => bin}, from: env, encoding_opts: [binary_as: type])
+
+          env
+        end)
+
+      # interpreter default
+      assert {:ok, true} =
+               Snex.pyeval(env, %{"b" => bin}, returning: "type(b) is bytes and b == b'hello'")
+
+      assert {:ok, true} =
+               Snex.pyeval(env,
+                 returning: "type(var_default) is bytes and var_default == b'hello'"
+               )
+
+      for {type, expected} <- [
+            bytes: "b'hello'",
+            bytearray: "bytearray(b'hello')",
+            str: "'hello'"
+          ] do
+        assert {:ok, true} =
+                 Snex.pyeval(env, %{"b" => bin},
+                   encoding_opts: [binary_as: type],
+                   returning: "type(b) is #{type} and b == #{expected}"
+                 )
+
+        assert {:ok, true} =
+                 Snex.pyeval(env,
+                   encoding_opts: [binary_as: type],
+                   returning: "type(var_#{type}) is #{type} and var_#{type} == #{expected}"
+                 )
+      end
     end
   end
 
@@ -266,7 +308,7 @@ defmodule Snex.SerdeTest do
   end
 
   describe "Elixir Snex.Serde.binary/1" do
-    test "is encoded as Python bytes", %{env: env} do
+    test "is encoded as Python bytes by default", %{env: env} do
       for len <- [0, 1, 255, 256] do
         bin = :binary.copy(<<171>>, len)
 
@@ -283,10 +325,25 @@ defmodule Snex.SerdeTest do
                  returning: "type(b) is bytes and b == bytes([1, 2, 3, 4])"
                )
     end
+
+    test "encodes according to `encoding_opts`", %{env: env} do
+      bin = "hello"
+
+      for {type, expected} <- [
+            str: "'hello'",
+            bytearray: "bytearray(b'hello')",
+            bytes: "b'hello'"
+          ] do
+        assert {:ok, true} =
+                 Snex.pyeval(env, %{"b" => Snex.Serde.binary(bin, type)},
+                   returning: "type(b) is #{type} and b == #{expected}"
+                 )
+      end
+    end
   end
 
   describe "Python bytes-like" do
-    test "bytes decodes as Elixir binary", %{env: env} do
+    test "decodes as Elixir binary", %{env: env} do
       for len <- [0, 1, 255, 256] do
         bin = :binary.copy(<<171>>, len)
 

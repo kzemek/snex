@@ -19,6 +19,7 @@ defmodule Snex.Internal.Pickler do
   @short_binbytes "C"
   @binbytes "B"
   @binbytes8 <<0x8E>>
+  @bytearray8 <<0x96>>
 
   # numbers
   @binfloat "G"
@@ -64,8 +65,8 @@ defmodule Snex.Internal.Pickler do
   defrecord :object, Object, [:module, :classname, :args]
   @type record_object :: record(:object, module: String.t(), classname: String.t(), args: list())
 
-  defrecord :binary, Binary, [:value]
-  @type record_binary :: record(:binary, value: iodata())
+  defrecord :binary, Binary, [:value, :as]
+  @type record_binary :: record(:binary, value: iodata(), as: :str | :bytes | :bytearray)
 
   defrecord :float, Float, [:value]
   @type record_float :: record(:float, value: float() | :inf | :"-inf" | :nan)
@@ -73,11 +74,16 @@ defmodule Snex.Internal.Pickler do
   defrecordp :fragment, Fragment, [:iodata]
   @opaque record_fragment :: record(:fragment, iodata: iodata())
 
-  defrecordp :encoding_opts, []
+  defrecordp :encoding_opts, binary_as: :str
 
   defp make_encoding_opts(opts) do
     List.foldl(opts, encoding_opts(), fn
-      {key, value}, _acc -> raise ArgumentError, "unknown option: #{key}: #{value}"
+      {:binary_as, value}, acc when value in [:str, :bytes, :bytearray] ->
+        encoding_opts(acc, binary_as: value)
+
+      {key, value}, _acc ->
+        raise ArgumentError,
+              "invalid encoding option key/value pair: `#{inspect(key)}: #{inspect(value)}`"
     end)
   end
 
@@ -94,8 +100,8 @@ defmodule Snex.Internal.Pickler do
   defp do_encode(a, _opts) when is_atom(a), do: encode_atom(a)
   defp do_encode(i, _opts) when is_integer(i), do: encode_integer(i)
   defp do_encode(f, _opts) when is_float(f), do: encode_float(f)
-  defp do_encode(s, _opts) when is_binary(s), do: encode_string(s)
-  defp do_encode(b, _opts) when is_record(b, Binary), do: encode_bytes(b)
+  defp do_encode(s, opts) when is_binary(s), do: encode_binary(s, opts)
+  defp do_encode(b, opts) when is_record(b, Binary), do: encode_binary(b, opts)
   defp do_encode(o, opts) when is_record(o, Object), do: encode_object(o, opts)
   defp do_encode(f, _opts) when is_record(f, Float), do: encode_float(f)
   defp do_encode(f, _opts) when is_record(f, Fragment), do: fragment(f, :iodata)
@@ -148,8 +154,16 @@ defmodule Snex.Internal.Pickler do
   defp encode_float(f),
     do: [@binfloat, <<f::64-float>>]
 
-  defp encode_bytes(binary(value: b)),
-    do: encode_bytes(b)
+  defp encode_binary(binary(value: b, as: as), opts),
+    do: encode_binary(b, encoding_opts(opts, binary_as: as))
+
+  defp encode_binary(b, opts) do
+    case encoding_opts(opts, :binary_as) do
+      :str -> encode_string(b)
+      :bytes -> encode_bytes(b)
+      :bytearray -> encode_bytearray(b)
+    end
+  end
 
   defp encode_bytes(b) do
     case iodata_size(b) do
@@ -160,8 +174,15 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
+  defp encode_bytearray(b) do
+    case iodata_size(b) do
+      size when size <= 0xFFFFFFFF_FFFFFFFF -> [@bytearray8, <<size::little-unsigned-64>>, b]
+      size -> raise ArgumentError, "binary too large: #{size} bytes"
+    end
+  end
+
   defp encode_string(s) do
-    case byte_size(s) do
+    case iodata_size(s) do
       size when size <= 0xFF -> [@short_binunicode, size, s]
       size when size <= 0xFFFFFFFF -> [@binunicode, <<size::little-unsigned-32>>, s]
       size when size <= 0xFFFFFFFF_FFFFFFFF -> [@binunicode8, <<size::little-unsigned-64>>, s]

@@ -14,7 +14,19 @@ defmodule Snex.Serde do
   @opaque serde_object :: Pickler.record_object()
   @opaque serde_float :: Pickler.record_float()
 
-  @type encoding_opts :: []
+  @type encoding_opt ::
+          {:binary_as, :str | :bytes | :bytearray}
+
+  @typedoc """
+  Options for encoding Elixir terms to a desired representation on the Python side.
+
+  - `binary_as`: The representation of binaries on the Python side. Only applies to <<binary>>
+    values, not to values wrapped with `Snex.Serde.binary/2`. Defaults to `:str`.
+    - `:str` encodes binary as `str`
+    - `:bytes` encodes binary as `bytes`
+    - `:bytearray` encodes binary as `bytearray`
+  """
+  @type encoding_opts :: [encoding_opt()]
 
   @doc false
   defdelegate encode_to_iodata!(term, opts \\ []), to: Pickler
@@ -31,11 +43,16 @@ defmodule Snex.Serde do
   end
 
   @doc """
-  Wraps an iodata value to decode as `bytes` on the Python side.
+  Wraps an iodata value to encode as a desired representation on the Python side.
+
+  ## Arguments
+
+  - `as`: The representation of the binary on the Python side. Defaults to `:bytes`.
   """
-  @spec binary(iodata()) :: serde_binary()
-  def binary(value) when is_binary(value) or is_list(value),
-    do: Pickler.binary(value: value)
+  @spec binary(iodata(), :str | :bytes | :bytearray) :: serde_binary()
+  def binary(value, as \\ :bytes)
+      when (is_binary(value) or is_list(value)) and as in [:str, :bytes, :bytearray],
+      do: Pickler.binary(value: value, as: as)
 
   @doc """
   Wraps an arbitrary Erlang term for efficient passing to Python.

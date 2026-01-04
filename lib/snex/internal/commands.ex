@@ -70,7 +70,7 @@ defmodule Snex.Internal.Commands.MakeEnv do
           Enum.map(
             command.from_env,
             &%{
-              "env" => Snex.Serde.binary(&1.env.id),
+              "env" => Snex.Serde.binary(&1.env.id, :bytes),
               "keys_mode" => Atom.to_string(&1.keys_mode),
               "keys" => &1.keys
             }
@@ -103,7 +103,7 @@ defmodule Snex.Internal.Commands.Eval do
       Snex.Serde.encode_to_iodata!(%{
         "command" => "eval",
         "code" => command.code,
-        "env" => Snex.Serde.binary(command.env.id),
+        "env" => Snex.Serde.binary(command.env.id, :bytes),
         "returning" => command.returning,
         "additional_vars" =>
           Map.new(command.additional_vars, fn {k, v} ->
@@ -133,7 +133,7 @@ defmodule Snex.Internal.Commands.GC do
     def encode(%@for{} = command, _user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
         "command" => "gc",
-        "env" => Snex.Serde.binary(command.env.id)
+        "env" => Snex.Serde.binary(command.env.id, :bytes)
       })
     end
   end
