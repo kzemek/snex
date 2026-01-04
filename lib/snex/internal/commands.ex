@@ -3,6 +3,9 @@ defprotocol Snex.Internal.Command do
 
   @spec referenced_envs(t()) :: [Snex.Env.t()]
   def referenced_envs(command)
+
+  @spec encode(t()) :: iodata()
+  def encode(command)
 end
 
 defmodule Snex.Internal.Commands.Init do
@@ -19,12 +22,10 @@ defmodule Snex.Internal.Commands.Init do
     @impl Snex.Internal.Command
     def referenced_envs(_command),
       do: []
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
+    @impl Snex.Internal.Command
     def encode(%@for{} = command),
-      do: %{"command" => "init", "code" => command.code}
+      do: Snex.Serde.encode_to_iodata!(%{"command" => "init", "code" => command.code})
   end
 end
 
@@ -56,12 +57,10 @@ defmodule Snex.Internal.Commands.MakeEnv do
     @impl Snex.Internal.Command
     def referenced_envs(%@for{from_env: from_envs}),
       do: Enum.map(from_envs, & &1.env)
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
+    @impl Snex.Internal.Command
     def encode(%@for{} = command) do
-      %{
+      Snex.Serde.encode_to_iodata!(%{
         "command" => "make_env",
         "additional_vars" => command.additional_vars,
         "from_env" =>
@@ -73,7 +72,7 @@ defmodule Snex.Internal.Commands.MakeEnv do
               "keys" => &1.keys
             }
           )
-      }
+      })
     end
   end
 end
@@ -95,18 +94,16 @@ defmodule Snex.Internal.Commands.Eval do
     @impl Snex.Internal.Command
     def referenced_envs(%@for{env: env}),
       do: [env]
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
+    @impl Snex.Internal.Command
     def encode(%@for{} = command) do
-      %{
+      Snex.Serde.encode_to_iodata!(%{
         "command" => "eval",
         "code" => command.code,
         "env" => Snex.Serde.binary(command.env.id),
         "returning" => command.returning,
         "additional_vars" => command.additional_vars
-      }
+      })
     end
   end
 end
@@ -125,12 +122,14 @@ defmodule Snex.Internal.Commands.GC do
     @impl Snex.Internal.Command
     def referenced_envs(%@for{env: env}),
       do: [env]
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
-    def encode(%@for{} = command),
-      do: %{"command" => "gc", "env" => Snex.Serde.binary(command.env.id)}
+    @impl Snex.Internal.Command
+    def encode(%@for{} = command) do
+      Snex.Serde.encode_to_iodata!(%{
+        "command" => "gc",
+        "env" => Snex.Serde.binary(command.env.id)
+      })
+    end
   end
 end
 
@@ -148,12 +147,14 @@ defmodule Snex.Internal.Commands.CallResponse do
     @impl Snex.Internal.Command
     def referenced_envs(%@for{}),
       do: []
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
-    def encode(%@for{} = command),
-      do: %{"command" => "call_response", "result" => command.result}
+    @impl Snex.Internal.Command
+    def encode(%@for{} = command) do
+      Snex.Serde.encode_to_iodata!(%{
+        "command" => "call_response",
+        "result" => command.result
+      })
+    end
   end
 end
 
@@ -169,11 +170,12 @@ defmodule Snex.Internal.Commands.CallErrorResponse do
     @impl Snex.Internal.Command
     def referenced_envs(%@for{}),
       do: []
-  end
 
-  defimpl Snex.Serde.Encoder do
-    @impl Snex.Serde.Encoder
-    def encode(%@for{}),
-      do: %{"command" => "call_error_response"}
+    @impl Snex.Internal.Command
+    def encode(%@for{}) do
+      Snex.Serde.encode_to_iodata!(%{
+        "command" => "call_error_response"
+      })
+    end
   end
 end

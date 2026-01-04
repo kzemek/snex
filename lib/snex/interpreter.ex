@@ -24,6 +24,7 @@ defmodule Snex.Interpreter do
   use GenServer
 
   alias Snex.Internal
+  alias Snex.Internal.Command
   alias Snex.Internal.Commands
 
   require Logger
@@ -432,7 +433,7 @@ defmodule Snex.Interpreter do
     do: :rand.bytes(16)
 
   defp encode_command(command, id),
-    do: [id, @request, Snex.Serde.encode_to_iodata!(command)]
+    do: [id, @request, Command.encode(command)]
 
   defp call_or_cast(_command, m, f, a, node) when node in [nil, node()],
     do: apply(m, f, a)

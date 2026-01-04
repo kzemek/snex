@@ -176,6 +176,9 @@ defmodule Snex.Internal.Pickler do
   defp encode_set(s),
     do: [@empty_set, @mark, Enum.map(s, &do_encode/1), @additems]
 
+  # We don't ship with any Snex.Serde.Encoder implementations, so Dialyzer complains the `case`
+  # is always nil
+  @dialyzer {:no_match, encode_struct: 1}
   defp encode_struct(%struct{} = s) do
     case Serde.Encoder.impl_for(s) do
       nil ->
