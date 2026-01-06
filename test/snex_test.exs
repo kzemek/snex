@@ -222,6 +222,14 @@ defmodule SnexTest do
     end
   end
 
+  describe "init_script" do
+    test "can run a init script with additional variables" do
+      {:ok, inp} = Snex.Interpreter.start_link(init_script: {"y = 2 * x", %{"x" => 3}})
+      {:ok, env} = Snex.make_env(inp)
+      assert {:ok, {3, 6}} = Snex.pyeval(env, returning: "x, y")
+    end
+  end
+
   describe "sync_start_timeout" do
     @tag trap_exit?: true
     test "returns an error if sync_start? is true" do

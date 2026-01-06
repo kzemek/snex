@@ -45,6 +45,8 @@ async def run_code(code: str, env: dict[str, Any]) -> None:
 
 
 async def run_init(cmd: InitCommand) -> OkResponse:
+    root_env.update(cmd["additional_vars"])
+
     if cmd["code"]:
         await run_code(cmd["code"], root_env)
 
@@ -93,8 +95,7 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResp
             reason=f"Environment {env_id_to_str(env_id)} not found",
         )
 
-    for key, value in cmd["additional_vars"].items():
-        env[key] = value
+    env.update(cmd["additional_vars"])
 
     if cmd["code"]:
         await run_code(cmd["code"], env)

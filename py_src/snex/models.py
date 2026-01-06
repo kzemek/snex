@@ -44,6 +44,7 @@ class Term(bytes):
 class InitCommand(TypedDict):
     command: Literal["init"]
     code: str | None
+    additional_vars: dict[str, Any]
 
 
 class MakeEnvCommandFromEnv(TypedDict):

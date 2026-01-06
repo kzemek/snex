@@ -62,15 +62,19 @@ defmodule Snex.Interpreter do
   defmacro __using__(opts),
     do: Internal.CustomInterpreter.using(__CALLER__.module, opts)
 
+  @type wrap_exec :: mfa() | (String.t(), [String.t()] -> {String.t(), [String.t()]})
+  @type environment :: %{optional(String.t()) => String.t()}
+  @type init_script :: String.t() | {String.t(), %{optional(String.t()) => any()}}
+
   @typedoc """
   Options for `start_link/1`.
   """
   @type option ::
           {:python, String.t()}
-          | {:wrap_exec, mfa() | (String.t(), [String.t()] -> {String.t(), [String.t()]})}
+          | {:wrap_exec, wrap_exec()}
           | {:cd, Path.t()}
-          | {:environment, %{optional(String.t()) => String.t()}}
-          | {:init_script, String.t()}
+          | {:environment, environment()}
+          | {:init_script, init_script()}
           | {:init_script_timeout, timeout()}
           | {:sync_start?, boolean()}
           | {:label, term()}
@@ -145,33 +149,43 @@ defmodule Snex.Interpreter do
 
   ## Options
 
-    - `:python` - The Python executable to use. This can be a full path or a command to find
-      via `System.find_executable/1`.
+    - `:python` (`t:String.t/0`) - The Python executable to use. This can be a full path
+      or a command to find via `System.find_executable/1`.
 
-    - `:wrap_exec` - A function to wrap the Python executable and arguments. It can be given
-      as an MFA or a function that takes two arguments: the Python executable path
-      and its arguments. If given as MFA, the arguments will be appended to the A list.
+    - `:wrap_exec` (`t:wrap_exec/0`) - A function to wrap the Python executable and arguments.
+      It can be given as an MFA or a function that takes two arguments: the Python executable path
+      and its arguments. If given as `{M,F,A}`, the arguments will be appended to the `A` argument
+      list.
 
-    - `:cd` - The directory to change to before running the interpreter.
+    - `:cd` (`t:String.t/0`) - The directory to change to before running the interpreter.
 
-    - `:environment` - A map of environment variables to set when running the Python executable.
+    - `:environment` (`t:environment/0`) - A map of environment variables to set when running
+      the Python executable.
 
-    - `:init_script` - A string of Python code to run when the interpreter is started.
-      Failing to run the script will cause the process initialization to fail. The variable context
-      left by the script will be the initial context for all `Snex.make_env/3` calls using this
-      interpreter.
+    - `:init_script` (`t:init_script/0`) - A string of Python code to run when the interpreter
+      is started, or a tuple with `{python_code, additional_vars}`. `additional_vars` are additional
+      variables that will be added to the root environment before running the script.
 
-    - `:init_script_timeout` - The timeout for the init script. Can be a number of milliseconds
-      or `:infinity`. Default: #{@default_init_script_timeout}.
+      The environment left by the script will be the initial context for all `Snex.make_env/3` calls
+      using this interpreter. This includes the variables passed through `additional_vars`. E.g.:
 
-    - `:sync_start?` - If `true`, the interpreter will start and run the init script in the init
-      callback. Setting this to `false` is useful for long-running init scripts; the downside
-      is that if something goes wrong, the interpreter process will start crashing after
-      successfully starting as a part of the supervision tree. Default: `true`.
+          {:ok, inp} = Snex.Interpreter.start_link(init_script: {"y = 2 * x", %{"x" => 3}})
+          # Any new `env` will already contain `x` and `y`
+          {:ok, env} = Snex.make_env(inp)
+          {:ok, {3, 6}} = Snex.pyeval(env, returning: "x, y")
 
-    - `:label` - The label of the interpreter process. This label will be used to label the process
-      through `:proc_lib.set_label/1`. It will also be present in telemetry event metadata under
-      `:interpreter_label` key.
+      Failing to run the script will cause the process initialization to fail.
+
+    - `:init_script_timeout` (`t:timeout/0`) - The timeout for the init script. Can be a number
+      of milliseconds or `:infinity`. Default: #{@default_init_script_timeout}.
+
+    - `:sync_start?` (`t:boolean/0`) - If `true`, the interpreter will start and run the init script
+      in the `init/1` callback. Setting this to `false` is useful for long-running init scripts;
+      the downside is that if something goes wrong, the interpreter process will start crashing
+      after successfully starting as a part of the supervision tree. Default: `true`.
+
+    - `:label` (`t:term/0`) - The label of the interpreter process. This label will be used to label
+      the process through `:proc_lib.set_label/1`.
 
     - `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - Options for encoding Elixir terms
       to a desired representation on the Python side. These settings will be used when encoding
@@ -371,7 +385,12 @@ defmodule Snex.Interpreter do
   end
 
   defp run_init_script(port, opts) do
-    command = %Commands.Init{code: opts[:init_script]}
+    command =
+      case opts[:init_script] do
+        {code, additional_vars} -> %Commands.Init{code: code, additional_vars: additional_vars}
+        code -> %Commands.Init{code: code}
+      end
+
     id = generate_request_id()
     encoded_command = encode_command(command, id, Keyword.get(opts, :encoding_opts, []))
     run_command(self(), port, encoded_command)

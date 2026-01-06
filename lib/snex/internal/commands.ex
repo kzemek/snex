@@ -12,11 +12,12 @@ defmodule Snex.Internal.Commands.Init do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          code: String.t() | nil
+          code: String.t() | nil,
+          additional_vars: %{optional(String.t()) => term()}
         }
 
   @enforce_keys [:code]
-  defstruct [:code]
+  defstruct [:code, additional_vars: %{}]
 
   defimpl Snex.Internal.Command do
     @impl Snex.Internal.Command
@@ -24,8 +25,16 @@ defmodule Snex.Internal.Commands.Init do
       do: []
 
     @impl Snex.Internal.Command
-    def encode(%@for{} = command, _user_encoding_opts),
-      do: Snex.Serde.encode_to_iodata!(%{"command" => "init", "code" => command.code})
+    def encode(%@for{} = command, user_encoding_opts) do
+      Snex.Serde.encode_to_iodata!(%{
+        "command" => "init",
+        "code" => command.code,
+        "additional_vars" =>
+          Map.new(command.additional_vars, fn {k, v} ->
+            {k, Snex.Serde.encode_fragment!(v, user_encoding_opts)}
+          end)
+      })
+    end
   end
 end
 
@@ -47,7 +56,7 @@ defmodule Snex.Internal.Commands.MakeEnv do
 
   @type t :: %__MODULE__{
           from_env: [FromEnv.t()],
-          additional_vars: %{String.t() => term()}
+          additional_vars: %{optional(String.t()) => term()}
         }
 
   @enforce_keys []
@@ -87,7 +96,7 @@ defmodule Snex.Internal.Commands.Eval do
           code: String.t() | nil,
           env: Snex.Env.t(),
           returning: String.t() | nil,
-          additional_vars: %{String.t() => term()}
+          additional_vars: %{optional(String.t()) => term()}
         }
 
   @enforce_keys [:code, :env]
