@@ -7,7 +7,6 @@ import functools
 import pickle
 import sys
 import traceback
-from typing import Any
 
 import snex
 
@@ -29,15 +28,15 @@ from .models import (
 
 ID_LEN_BYTES = 16
 
-root_env: dict[str, Any] = {}
-envs: dict[EnvID, dict[str, Any]] = {}
+root_env: dict[str, object] = {}
+envs: dict[EnvID, dict[str, object]] = {}
 
 
 def env_id_to_str(env_id: EnvID) -> str:
     return base64.b64encode(env_id).decode()
 
 
-async def run_code(code: str, env: dict[str, Any]) -> None:
+async def run_code(code: str, env: dict[str, object]) -> None:
     code = compile(code, "", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
     res = eval(code, env, env)  # noqa: S307
     if asyncio.iscoroutine(res):
@@ -142,8 +141,8 @@ async def run(req_id: bytes, data: InRequest | InResponse) -> OutResponse | None
 def on_task_done(
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    running_tasks: set[asyncio.Task[Any]],
-    task: asyncio.Task[Any],
+    running_tasks: set[asyncio.Task[OutResponse | None]],
+    task: asyncio.Task[OutResponse | None],
 ) -> None:
     running_tasks.discard(task)
 
@@ -173,7 +172,7 @@ def on_task_done(
 
 async def run_loop() -> None:
     loop = asyncio.get_running_loop()
-    running_tasks: set[asyncio.Task[Any]] = set()
+    running_tasks: set[asyncio.Task[OutResponse | None]] = set()
 
     reader, writer = await transport.setup_io(loop)
     interface.init(writer)

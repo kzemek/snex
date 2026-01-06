@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Any, Literal, NewType, TypedDict
+from typing import TYPE_CHECKING, Literal, NewType, TypedDict
 
 if TYPE_CHECKING:
     from typing import NotRequired
@@ -44,7 +44,7 @@ class Term(bytes):
 class InitCommand(TypedDict):
     command: Literal["init"]
     code: str | None
-    additional_vars: dict[str, Any]
+    additional_vars: dict[str, object]
 
 
 class MakeEnvCommandFromEnv(TypedDict):
@@ -56,7 +56,7 @@ class MakeEnvCommandFromEnv(TypedDict):
 class MakeEnvCommand(TypedDict):
     command: Literal["make_env"]
     from_env: list[MakeEnvCommandFromEnv]
-    additional_vars: dict[str, Any]
+    additional_vars: dict[str, object]
 
 
 class EvalCommand(TypedDict):
@@ -64,7 +64,7 @@ class EvalCommand(TypedDict):
     code: str | None
     env: EnvID
     returning: str | None
-    additional_vars: dict[str, Any]
+    additional_vars: dict[str, object]
 
 
 class GCCommand(TypedDict):
@@ -78,13 +78,13 @@ class OkResponse(TypedDict):
 
 class OkValueResponse(TypedDict):
     status: Literal["ok_value"]
-    value: Any
+    value: object
 
 
 class SendCommand(TypedDict):
     command: Literal["send"]
     to: Term
-    data: Any
+    data: object
 
 
 class CallCommand(TypedDict):
@@ -92,7 +92,7 @@ class CallCommand(TypedDict):
     module: str | Atom | Term
     function: str | Atom | Term
     node: str | Atom | Term | None
-    args: list[Any]
+    args: list[object]
 
 
 class CastCommand(TypedDict):
@@ -100,12 +100,12 @@ class CastCommand(TypedDict):
     module: str | Atom | Term
     function: str | Atom | Term
     node: str | Atom | Term | None
-    args: list[Any]
+    args: list[object]
 
 
 class CallResponse(TypedDict):
     command: Literal["call_response"]
-    result: Any
+    result: object
 
 
 class CallErrorResponse(TypedDict):

@@ -69,15 +69,15 @@ _FLOAT_ATOMS = {
 SMALL_INT_CACHE = [bytes((SMALL_INTEGER_EXT, i)) for i in range(256)]
 
 
-def _default_custom_encoder(data: Any) -> Any:  # noqa: ANN401
+def _default_custom_encoder(data: object) -> object:
     msg = f"Cannot serialize object of {type(data)}"
     raise TypeError(msg)
 
 
-_custom_encoder: Callable[[Any], Any] = _default_custom_encoder
+_custom_encoder: Callable[[object], object] = _default_custom_encoder
 
 
-def set_custom_encoder(encoder_fun: Callable[[Any], Any]) -> None:
+def set_custom_encoder(encoder_fun: Callable[[object], object]) -> None:
     """
     Set a custom encoding function for objects that are not supported by default.
 
@@ -89,7 +89,7 @@ def set_custom_encoder(encoder_fun: Callable[[Any], Any]) -> None:
     _custom_encoder = encoder_fun
 
 
-def encode(data: Any) -> Parts:  # noqa: ANN401
+def encode(data: object) -> Parts:
     parts: Parts = [BYTES_VERSION]
     _ENCODER_DISPATCH.get(type(data), _encode_custom)(data, parts)
     return parts
@@ -155,7 +155,7 @@ def _encode_term(data: Term, parts: Parts) -> None:
     parts.append(mv[1:])
 
 
-def _encode_list(data: list[Any], parts: Parts) -> None:
+def _encode_list(data: list[object], parts: Parts) -> None:
     if data:
         parts.append(LENGTH32_STRUCT.pack(LIST_EXT, len(data)))
         for item in data:
@@ -163,7 +163,7 @@ def _encode_list(data: list[Any], parts: Parts) -> None:
     parts.append(BYTES_NIL_EXT)
 
 
-def _encode_tuple(data: tuple[Any, ...], parts: Parts) -> None:
+def _encode_tuple(data: tuple[object, ...], parts: Parts) -> None:
     length = len(data)
     if length <= MAX_U8:
         parts.append(SMALL_TUPLE_STRUCT.pack(SMALL_TUPLE_EXT, length))
@@ -177,14 +177,14 @@ def _encode_tuple(data: tuple[Any, ...], parts: Parts) -> None:
         _ENCODER_DISPATCH.get(type(item), _encode_custom)(item, parts)
 
 
-def _encode_dict(data: dict[Any, Any], parts: Parts) -> None:
+def _encode_dict(data: dict[object, object], parts: Parts) -> None:
     parts.append(LENGTH32_STRUCT.pack(MAP_EXT, len(data)))
     for key, value in data.items():
         _ENCODER_DISPATCH.get(type(key), _encode_custom)(key, parts)
         _ENCODER_DISPATCH.get(type(value), _encode_custom)(value, parts)
 
 
-def _encode_set(data: set[Any] | frozenset[Any], parts: Parts) -> None:
+def _encode_set(data: set[object] | frozenset[object], parts: Parts) -> None:
     # This depends on MapSet internal representation.
     # It is technically opaque, though stable for a long time now.
     # If it ever changes, we'll need to update this serializer.
@@ -202,7 +202,7 @@ def _encode_set(data: set[Any] | frozenset[Any], parts: Parts) -> None:
         parts.append(BYTES_NIL_EXT)
 
 
-def _encode_custom(data: Any, parts: Parts) -> None:  # noqa: ANN401
+def _encode_custom(data: object, parts: Parts) -> None:
     if isinstance(data, bool):
         _encode_bool(data, parts)
     elif isinstance(data, int):

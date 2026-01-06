@@ -10,7 +10,7 @@ _main_loop: AbstractEventLoop | None = None
 _writer: asyncio.WriteTransport | None = None
 _main_thread_id: int | None = None
 
-_call_futures: dict[bytes, tuple[asyncio.Future[Any], AbstractEventLoop, int]] = {}
+_call_futures: dict[bytes, tuple[asyncio.Future[object], AbstractEventLoop, int]] = {}
 
 
 class ElixirError(Exception):
@@ -42,7 +42,7 @@ def _write_request(req_id: bytes, command: models.OutRequest) -> None:
         )
 
 
-def send(to: Any, data: Any) -> None:  # noqa: ANN401
+def send(to: object, data: object) -> None:
     """
     Send data to a BEAM process.
 
@@ -58,7 +58,7 @@ def send(to: Any, data: Any) -> None:  # noqa: ANN401
 def cast(
     module: str | Atom | Term,
     function: str | Atom | Term,
-    args: list[Any],
+    args: list[object],
     *,
     node: str | Atom | Term | None = None,
 ) -> None:
@@ -93,7 +93,7 @@ def cast(
 async def call(
     module: str | Atom | Term,
     function: str | Atom | Term,
-    args: list[Any],
+    args: list[object],
     *,
     node: str | Atom | Term | None = None,
 ) -> Any:  # noqa: ANN401
