@@ -300,7 +300,7 @@ defmodule Snex.Interpreter do
   end
 
   @spec handle_info({Task.ref(), term()}, state()) :: {:noreply, state()}
-  def handle_info({ref, result}, state) when is_map_key(state.pending_tasks, ref) do
+  def handle_info({ref, result}, %State{} = state) when is_map_key(state.pending_tasks, ref) do
     Process.demonitor(ref, [:flush])
     {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
 
@@ -325,7 +325,8 @@ defmodule Snex.Interpreter do
   end
 
   @spec handle_info({:DOWN, Task.ref(), term(), term(), term()}, state()) :: {:noreply, state()}
-  def handle_info({:DOWN, ref, _, _, reason}, state) when is_map_key(state.pending_tasks, ref) do
+  def handle_info({:DOWN, ref, _, _, reason}, %State{} = state)
+      when is_map_key(state.pending_tasks, ref) do
     {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
 
     if id do

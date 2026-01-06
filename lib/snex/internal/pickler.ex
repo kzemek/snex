@@ -241,7 +241,10 @@ defmodule Snex.Internal.Pickler do
         encode_map(s, opts)
 
       encoder ->
-        case encoder.encode(s) do
+        # With no Serde.Encoder implementations shipping by default, Elixir
+        # type checking thinks `encoder` here is `nil`.
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        case apply(encoder, :encode, [s]) do
           %^struct{} = same_struct_type -> encode_map(same_struct_type, opts)
           encoded -> do_encode(encoded, opts)
         end

@@ -72,8 +72,13 @@ defmodule Snex.Serde do
   returned to Elixir.
   """
   @spec term(term()) :: serde_term()
-  def term(value),
-    do: object("snex.models", "Term", [binary(:erlang.term_to_binary(value))])
+  def term(value) do
+    Pickler.object(
+      module: "snex.models",
+      classname: "Term",
+      args: [binary(:erlang.term_to_binary(value))]
+    )
+  end
 
   @doc ~s'''
   Builds a Python object from a module, class name, and arguments.
