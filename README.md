@@ -536,12 +536,14 @@ When you inspect a stacktrace, or receive an exception result, your code will ha
 To help with that, Snex defines sigils `~p` and `~P` that annotate your code with location information, building a `Snex.Code` struct out of your string literal.
 
 ```elixir
+import Snex.Sigils
+
 {:ok, inp} = Snex.Interpreter.start_link()
 {:ok, env} = Snex.make_env(inp)
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(env, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 541, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 544, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` (`code` argument and `:returning` opt) and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
