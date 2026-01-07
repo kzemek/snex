@@ -2,9 +2,12 @@ defmodule SnexTest do
   use ExUnit.Case, async: true
   use MarkdownDoctest
 
+  import Snex.Sigils
+
   markdown_doctest "README.md",
     except:
       &String.contains?(&1, [
+        "iex>",
         "defmodule",
         "defimpl",
         "def deps",
@@ -295,6 +298,40 @@ defmodule SnexTest do
 
       assert {cmd, 0} = System.cmd("ps", ["-p", "#{os_pid}", "-o", "comm="])
       assert cmd =~ "python"
+    end
+  end
+
+  describe "sigil_p" do
+    test "preserves code location", %{env: env} do
+      {line, code} = {
+        __ENV__.line,
+        ~p"""
+        raise RuntimeError("test")
+        """
+      }
+
+      assert {:error, %Snex.Error{} = reason} = Snex.pyeval(env, code)
+      assert Enum.at(reason.traceback, -2) =~ ~s'File "#{__ENV__.file}", line #{line + 2}'
+
+      {line, code} = {
+        __ENV__.line,
+        ~P"""
+        raise RuntimeError("test")
+        """
+      }
+
+      assert {:error, %Snex.Error{} = reason} = Snex.pyeval(env, code)
+      assert Enum.at(reason.traceback, -2) =~ ~s'File "#{__ENV__.file}", line #{line + 2}'
+    end
+
+    test "preserves code location in single-line strings", %{env: env} do
+      {line, code} = {__ENV__.line, ~p"raise RuntimeError('test')"}
+      assert {:error, %Snex.Error{} = reason} = Snex.pyeval(env, code)
+      assert Enum.at(reason.traceback, -2) =~ ~s'File "#{__ENV__.file}", line #{line}'
+    end
+
+    test "accepts empty code", %{env: env} do
+      assert :ok = Snex.pyeval(env, ~p"")
     end
   end
 end

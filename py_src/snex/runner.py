@@ -7,11 +7,13 @@ import functools
 import pickle
 import sys
 import traceback
+from typing import Literal
 
 import snex
 
 from . import interface, transport
 from .models import (
+    Code,
     EnvID,
     ErrorResponse,
     EvalCommand,
@@ -36,18 +38,35 @@ def env_id_to_str(env_id: EnvID) -> str:
     return base64.b64encode(env_id).decode()
 
 
-async def run_code(code: str, env: dict[str, object]) -> None:
-    code = compile(code, "", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
-    res = eval(code, env, env)  # noqa: S307
+async def run_code(
+    code: Code,
+    env: dict[str, object],
+    mode: Literal["exec", "eval"],
+) -> object:
+    line_offset = code["line"] - 1
+    if code["code"] and code["code"][-1] == "\n":
+        # heuristic: if the code ends with a newline, then assume we're
+        # in a heredoc. In that case, code starts at next line.
+        line_offset += 1
+
+    # offset the actual code for accurate line reporting
+    code_str = "\n" * line_offset + code["code"]
+
+    flags = 0 if mode == "eval" else ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+    code_obj = compile(code_str, code["file"], mode, flags=flags)
+    res = eval(code_obj, env, env)  # noqa: S307
+
     if asyncio.iscoroutine(res):
         await res
+
+    return res if mode == "eval" else None
 
 
 async def run_init(cmd: InitCommand) -> OkResponse:
     root_env.update(cmd["additional_vars"])
 
     if cmd["code"]:
-        await run_code(cmd["code"], root_env)
+        await run_code(cmd["code"], root_env, "exec")
 
     return OkResponse(status="ok")
 
@@ -97,10 +116,10 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResp
     env.update(cmd["additional_vars"])
 
     if cmd["code"]:
-        await run_code(cmd["code"], env)
+        await run_code(cmd["code"], env, "exec")
 
     if cmd["returning"]:
-        value = eval(cmd["returning"], env, env)  # noqa: S307
+        value = await run_code(cmd["returning"], env, "eval")
         return OkValueResponse(status="ok_value", value=value)
 
     return OkResponse(status="ok")

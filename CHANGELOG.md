@@ -32,6 +32,25 @@
 
   Existing `snex.send(to, data)` function is now implemented on top of `snex.cast`.
 
+- **Sigils for code location**
+
+  New `%Snex.Code{}` struct holds location metadata for Python code, for accurate stacktraces on Python side.
+
+  `import Snex.Sigils` to use `~p"code"`, `~P"code"` sigils, which create `%Snex.Code{}` automatically.
+
+  ```elixir
+  iex> Snex.pyeval(env, ~p"raise RuntimeError('test')")
+
+  {:error,
+    %Snex.Error{
+    code: :python_runtime_error,
+    reason: "test",
+    traceback: [...,
+      "  File \"/Users/me/snex/CHANGELOG.md\", line 41, in <module>\n    raise RuntimeError(\"test\")\n",
+      "RuntimeError: test\n"]
+    }}
+  ```
+
 - **New `Snex.Interpreter` (and custom interpreters) options**
 
   - `:label` - labels the interpreter process through `:proc_lib.set_label/1`.

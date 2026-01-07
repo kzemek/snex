@@ -41,9 +41,15 @@ class Term(bytes):
     __slots__ = ()
 
 
+class Code(TypedDict):
+    code: str
+    file: str
+    line: int
+
+
 class InitCommand(TypedDict):
     command: Literal["init"]
-    code: str | None
+    code: Code | None
     additional_vars: dict[str, object]
 
 
@@ -61,9 +67,9 @@ class MakeEnvCommand(TypedDict):
 
 class EvalCommand(TypedDict):
     command: Literal["eval"]
-    code: str | None
+    code: Code | None
     env: EnvID
-    returning: str | None
+    returning: Code | None
     additional_vars: dict[str, object]
 
 

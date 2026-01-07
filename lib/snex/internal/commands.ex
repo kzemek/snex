@@ -12,7 +12,7 @@ defmodule Snex.Internal.Commands.Init do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          code: String.t() | nil,
+          code: Snex.Code.t() | nil,
           additional_vars: %{optional(String.t()) => term()}
         }
 
@@ -93,9 +93,9 @@ defmodule Snex.Internal.Commands.Eval do
   @moduledoc false
 
   @type t :: %__MODULE__{
-          code: String.t() | nil,
+          code: Snex.Code.t() | nil,
           env: Snex.Env.t(),
-          returning: String.t() | nil,
+          returning: Snex.Code.t() | nil,
           additional_vars: %{optional(String.t()) => term()}
         }
 

@@ -230,21 +230,16 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  # We don't ship with any Snex.Serde.Encoder implementations, so Dialyzer complains the `case`
-  # is always nil
-  @dialyzer {:no_match, encode_struct: 2}
   # Dialyzer complains on %^struct{} match
   @dialyzer {:no_opaque, encode_struct: 2}
+  @dialyzer {:no_match, encode_struct: 2}
   defp encode_struct(%struct{} = s, opts) do
     case Serde.Encoder.impl_for(s) do
       nil ->
         encode_map(s, opts)
 
       encoder ->
-        # With no Serde.Encoder implementations shipping by default, Elixir
-        # type checking thinks `encoder` here is `nil`.
-        # credo:disable-for-next-line Credo.Check.Refactor.Apply
-        case apply(encoder, :encode, [s]) do
+        case encoder.encode(s) do
           %^struct{} = same_struct_type -> encode_map(same_struct_type, opts)
           encoded -> do_encode(encoded, opts)
         end

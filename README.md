@@ -86,6 +86,7 @@ end
   - [Use your in-repo project](#use-your-in-repo-project)
   - [Send messages from Python code](#send-messages-from-python-code)
   - [Cast and call Elixir code from Python](#cast-and-call-elixir-code-from-python)
+  - [Accurate code locations in Python traces](#accurate-code-locations-in-python-traces)
 
 ### Custom Interpreter
 
@@ -516,4 +517,40 @@ They also accept an optional `node` argument to apply the function on a remote n
     %{"agent" => agent, "identity" => & &1},
     returning: "result"
   )
+```
+
+#### Accurate code locations in Python traces
+
+When you use `Snex.pyeval/4` with code given as `String.t()`, as in all examples above, Snex doesn't know where the code literal actually lives.
+When you inspect a stacktrace, or receive an exception result, your code will have a virtual `<Snex.Code>` location:
+
+```elixir
+{:ok, inp} = Snex.Interpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:error, %Snex.Error{} = reason} = Snex.pyeval(env, "raise RuntimeError('nolocation')")
+
+~s'  File "<Snex.Code>", line 1, in <module>\n' = Enum.at(reason.traceback, -2)
+```
+
+To help with that, Snex defines sigils `~p` and `~P` that annotate your code with location information, building a `Snex.Code` struct out of your string literal.
+
+```elixir
+{:ok, inp} = Snex.Interpreter.start_link()
+{:ok, env} = Snex.make_env(inp)
+
+{:error, %Snex.Error{} = reason} = Snex.pyeval(env, ~p"raise RuntimeError('nolocation')")
+
+assert ~s'  File "#{__ENV__.file}", line 541, in <module>\n' == Enum.at(reason.traceback, -2)
+```
+
+All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` (`code` argument and `:returning` opt) and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
+
+As with other sigils, lowercase `~p` interpolates and parses escapes in the literal, while uppercase `~P` passes the literal as-is:
+
+```elixir
+iex> IO.puts(~p"12\t#{34}")
+12  34
+iex> IO.puts(~P"12\t#{34}")
+12\t#{34}
 ```

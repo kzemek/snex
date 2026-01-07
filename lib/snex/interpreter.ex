@@ -64,7 +64,10 @@ defmodule Snex.Interpreter do
 
   @type wrap_exec :: mfa() | (String.t(), [String.t()] -> {String.t(), [String.t()]})
   @type environment :: %{optional(String.t()) => String.t()}
-  @type init_script :: String.t() | {String.t(), %{optional(String.t()) => any()}}
+  @type init_script ::
+          String.t()
+          | Snex.Code.t()
+          | {String.t() | Snex.Code.t(), %{optional(String.t()) => any()}}
 
   @typedoc """
   Options for `start_link/1`.
@@ -386,11 +389,13 @@ defmodule Snex.Interpreter do
   end
 
   defp run_init_script(port, opts) do
-    command =
+    {code, additional_vars} =
       case opts[:init_script] do
-        {code, additional_vars} -> %Commands.Init{code: code, additional_vars: additional_vars}
-        code -> %Commands.Init{code: code}
+        {code, additional_vars} -> {code, additional_vars}
+        code -> {code, %{}}
       end
+
+    command = %Commands.Init{code: Snex.Code.wrap(code), additional_vars: additional_vars}
 
     id = generate_request_id()
     encoded_command = encode_command(command, id, Keyword.get(opts, :encoding_opts, []))

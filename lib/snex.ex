@@ -20,7 +20,9 @@ defmodule Snex do
 
   See `Snex.pyeval/4`.
   """
-  @type code :: String.t()
+  @type code :: String.t() | Snex.Code.t()
+
+  defguardp is_code(code) when is_binary(code) or is_struct(code, Snex.Code)
 
   @typedoc """
   A map of additional variables to be added to the environment.
@@ -48,7 +50,7 @@ defmodule Snex do
   Option for `Snex.pyeval/4`.
   """
   @type pyeval_opt ::
-          {:returning, [String.t()] | String.t()}
+          {:returning, [code()] | code()}
           | {:timeout, timeout()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
 
@@ -207,7 +209,7 @@ defmodule Snex do
           Snex.Env.t(),
           code() | additional_vars() | [pyeval_opt()]
         ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
-  def pyeval(%Snex.Env{} = env, code) when is_binary(code),
+  def pyeval(%Snex.Env{} = env, code) when is_code(code),
     do: pyeval(env, code, %{}, [])
 
   def pyeval(%Snex.Env{} = env, additional_vars) when is_map(additional_vars),
@@ -238,11 +240,13 @@ defmodule Snex do
       when is_map(additional_vars) and is_list(opts),
       do: pyeval(env, nil, additional_vars, opts)
 
-  def pyeval(%Snex.Env{} = env, code, additional_vars) when is_map(additional_vars),
-    do: pyeval(env, code, additional_vars, [])
+  def pyeval(%Snex.Env{} = env, code, additional_vars)
+      when is_code(code) and is_map(additional_vars),
+      do: pyeval(env, code, additional_vars, [])
 
-  def pyeval(%Snex.Env{} = env, code, opts) when is_list(opts),
-    do: pyeval(env, code, %{}, opts)
+  def pyeval(%Snex.Env{} = env, code, opts)
+      when is_code(code) and is_list(opts),
+      do: pyeval(env, code, %{}, opts)
 
   @doc ~s'''
   Evaluates a Python code string in the given environment.
@@ -282,7 +286,7 @@ defmodule Snex do
           [pyeval_opt()]
         ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(%Snex.Env{} = env, code, additional_vars, opts)
-      when (is_binary(code) or is_nil(code)) and is_map(additional_vars) and is_list(opts) do
+      when (is_code(code) or is_nil(code)) and is_map(additional_vars) and is_list(opts) do
     check_additional_vars(additional_vars)
 
     returning =
@@ -291,10 +295,10 @@ defmodule Snex do
 
     command =
       %Commands.Eval{
-        code: code,
+        code: Snex.Code.wrap(code),
         env: env,
         additional_vars: additional_vars,
-        returning: returning
+        returning: Snex.Code.wrap(returning)
       }
 
     encoding_opts = Keyword.merge(env.encoding_opts, Keyword.get(opts, :encoding_opts, []))
