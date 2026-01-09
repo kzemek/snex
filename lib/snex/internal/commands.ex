@@ -27,7 +27,7 @@ defmodule Snex.Internal.Commands.Init do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "init",
+        "type" => "init",
         "code" => command.code,
         "additional_vars" =>
           Map.new(command.additional_vars, fn {k, v} ->
@@ -70,7 +70,7 @@ defmodule Snex.Internal.Commands.MakeEnv do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "make_env",
+        "type" => "make_env",
         "additional_vars" =>
           Map.new(command.additional_vars, fn {k, v} ->
             {k, Snex.Serde.encode_fragment!(v, user_encoding_opts)}
@@ -110,7 +110,7 @@ defmodule Snex.Internal.Commands.Eval do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "eval",
+        "type" => "eval",
         "code" => command.code,
         "env" => Snex.Serde.binary(command.env.id, :bytes),
         "returning" => command.returning,
@@ -141,7 +141,7 @@ defmodule Snex.Internal.Commands.GC do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, _user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "gc",
+        "type" => "gc",
         "env" => Snex.Serde.binary(command.env.id, :bytes)
       })
     end
@@ -166,7 +166,7 @@ defmodule Snex.Internal.Commands.CallResponse do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "call_response",
+        "type" => "call_response",
         "result" => Snex.Serde.encode_fragment!(command.result, user_encoding_opts)
       })
     end
@@ -189,7 +189,7 @@ defmodule Snex.Internal.Commands.CallErrorResponse do
     @impl Snex.Internal.Command
     def encode(%@for{} = command, _user_encoding_opts) do
       Snex.Serde.encode_to_iodata!(%{
-        "command" => "call_error_response",
+        "type" => "call_error_response",
         "reason" => command.reason
       })
     end

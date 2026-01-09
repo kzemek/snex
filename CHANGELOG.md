@@ -8,6 +8,10 @@
   It always felt wrong to have a result shape that depended on passed options.
   Most importantly, this change fits well with the removal of `:returning`.
 
+### Changes
+
+- **Rename `%Snex.Code{}`'s `:code` to `:src`**
+
 ## 0.3.2
 
 ### Fixes

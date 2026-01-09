@@ -42,13 +42,13 @@ class Term(bytes):
 
 
 class Code(TypedDict):
-    code: str
+    src: str
     file: str
     line: int
 
 
 class InitCommand(TypedDict):
-    command: Literal["init"]
+    type: Literal["init"]
     code: Code | None
     additional_vars: dict[str, object]
 
@@ -60,13 +60,13 @@ class MakeEnvCommandFromEnv(TypedDict):
 
 
 class MakeEnvCommand(TypedDict):
-    command: Literal["make_env"]
+    type: Literal["make_env"]
     from_env: list[MakeEnvCommandFromEnv]
     additional_vars: dict[str, object]
 
 
 class EvalCommand(TypedDict):
-    command: Literal["eval"]
+    type: Literal["eval"]
     code: Code | None
     env: EnvID
     returning: Code | None
@@ -74,7 +74,7 @@ class EvalCommand(TypedDict):
 
 
 class GCCommand(TypedDict):
-    command: Literal["gc"]
+    type: Literal["gc"]
     env: EnvID
 
 
@@ -84,13 +84,13 @@ class OkResponse(TypedDict):
 
 
 class SendCommand(TypedDict):
-    command: Literal["send"]
+    type: Literal["send"]
     to: Term
     data: object
 
 
 class CallCommand(TypedDict):
-    command: Literal["call"]
+    type: Literal["call"]
     module: str | Atom | Term
     function: str | Atom | Term
     node: str | Atom | Term | None
@@ -98,7 +98,7 @@ class CallCommand(TypedDict):
 
 
 class CastCommand(TypedDict):
-    command: Literal["cast"]
+    type: Literal["cast"]
     module: str | Atom | Term
     function: str | Atom | Term
     node: str | Atom | Term | None
@@ -106,12 +106,12 @@ class CastCommand(TypedDict):
 
 
 class CallResponse(TypedDict):
-    command: Literal["call_response"]
+    type: Literal["call_response"]
     result: object
 
 
 class CallErrorResponse(TypedDict):
-    command: Literal["call_error_response"]
+    type: Literal["call_error_response"]
     reason: str
 
 

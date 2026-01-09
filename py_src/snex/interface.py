@@ -80,7 +80,7 @@ def cast(
     """
     req_id = models.generate_id()
     command = models.CastCommand(
-        command="cast",
+        type="cast",
         module=module,
         function=function,
         args=args,
@@ -118,7 +118,7 @@ async def call(
     req_id = models.generate_id()
     future = loop.create_future()
     command = models.CallCommand(
-        command="call",
+        type="call",
         module=module,
         function=function,
         args=args,
@@ -137,7 +137,7 @@ async def call(
 
 def on_call_response(
     req_id: bytes,
-    data: models.CallResponse | models.CallErrorResponse,
+    response: models.CallResponse | models.CallErrorResponse,
 ) -> None:
     entry = _call_futures.pop(req_id, None)
     if entry is None:
@@ -146,13 +146,13 @@ def on_call_response(
 
     future, loop, thread_id = entry
 
-    if data["command"] == "call_response":
+    if response["type"] == "call_response":
         if threading.get_ident() == thread_id:
-            future.set_result(data["result"])
+            future.set_result(response["result"])
         else:
-            loop.call_soon_threadsafe(future.set_result, data["result"])
+            loop.call_soon_threadsafe(future.set_result, response["result"])
     else:
-        exc = ElixirError(req_id, data["reason"])
+        exc = ElixirError(req_id, response["reason"])
         if threading.get_ident() == thread_id:
             future.set_exception(exc)
         else:
