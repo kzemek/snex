@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import ast
 import asyncio
 import base64
 import functools
 import pickle
 import sys
 import traceback
-from typing import Literal
 
 import snex
 
-from . import interface, transport
+from . import code, interface, transport
 from .models import (
-    Code,
     EnvID,
     ErrorResponse,
     EvalCommand,
@@ -37,35 +34,11 @@ def env_id_to_str(env_id: EnvID) -> str:
     return base64.b64encode(env_id).decode()
 
 
-async def run_code(
-    code: Code,
-    env: dict[str, object],
-    mode: Literal["exec", "eval"],
-) -> object:
-    line_offset = code["line"] - 1
-    if code["src"] and code["src"][-1] == "\n":
-        # heuristic: if the code ends with a newline, then assume we're
-        # in a heredoc. In that case, code starts at next line.
-        line_offset += 1
-
-    # offset the actual code for accurate line reporting
-    code_str = "\n" * line_offset + code["src"]
-
-    flags = 0 if mode == "eval" else ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
-    code_obj = compile(code_str, code["file"], mode, flags=flags)
-    res = eval(code_obj, env, env)  # noqa: S307
-
-    if asyncio.iscoroutine(res):
-        await res
-
-    return res if mode == "eval" else None
-
-
 async def run_init(cmd: InitCommand) -> OkResponse:
     root_env.update(cmd["additional_vars"])
 
     if cmd["code"]:
-        await run_code(cmd["code"], root_env, "exec")
+        await code.run_exec(cmd["code"], root_env)
 
     return OkResponse(status="ok", value=None)
 
@@ -115,10 +88,10 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
     env.update(cmd["additional_vars"])
 
     if cmd["code"]:
-        await run_code(cmd["code"], env, "exec")
+        await code.run_exec(cmd["code"], env)
 
     if cmd["returning"]:
-        value = await run_code(cmd["returning"], env, "eval")
+        value = code.run_eval(cmd["returning"], env)
         return OkResponse(status="ok", value=value)
 
     return OkResponse(status="ok", value=None)
