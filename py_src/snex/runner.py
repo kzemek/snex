@@ -75,15 +75,18 @@ def run_make_env(cmd: MakeEnvCommand) -> OkResponse | ErrorResponse:
 
 
 async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
-    env_id = cmd["env"]
-    try:
-        env = envs[env_id]
-    except KeyError:
-        return ErrorResponse(
-            status="error",
-            code="env_not_found",
-            reason=f"Environment {env_id_to_str(env_id)} not found",
-        )
+    if cmd["env"] is None:
+        env = root_env.copy()
+    else:
+        env_id = cmd["env"]
+        try:
+            env = envs[env_id]
+        except KeyError:
+            return ErrorResponse(
+                status="error",
+                code="env_not_found",
+                reason=f"Environment {env_id_to_str(env_id)} not found",
+            )
 
     env.update(cmd["additional_vars"])
 

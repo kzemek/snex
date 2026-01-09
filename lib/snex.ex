@@ -15,14 +15,16 @@ defmodule Snex do
 
   alias Snex.Internal.Commands
 
+  defguardp is_code(code) when is_binary(code) or is_struct(code, Snex.Code)
+  defguardp is_vars(vars) when is_map(vars)
+  defguardp is_opts(opts) when is_list(opts)
+
   @typedoc """
   A string of Python code to be evaluated.
 
   See `Snex.pyeval/4`.
   """
   @type code :: String.t() | Snex.Code.t()
-
-  defguardp is_code(code) when is_binary(code) or is_struct(code, Snex.Code)
 
   @typedoc """
   A map of additional variables to be added to the environment.
@@ -53,6 +55,8 @@ defmodule Snex do
           {:returning, [code()] | code()}
           | {:timeout, timeout()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
+
+  @type env_or_interpreter :: Snex.Env.t() | Snex.Interpreter.server()
 
   @doc """
   Shorthand for `Snex.make_env/3`:
@@ -159,7 +163,12 @@ defmodule Snex do
     from_env = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
     command = %Commands.MakeEnv{from_env: from_env, additional_vars: additional_vars}
 
-    %{port: port, encoding_opts: encoding_opts} = Snex.Interpreter.get_settings(interpreter)
+    %{port: port, encoding_opts: encoding_opts} =
+      case from_env do
+        [%Commands.MakeEnv.FromEnv{env: env} | _] -> env
+        _ -> Snex.Interpreter.get_settings(interpreter)
+      end
+
     merged_encoding_opts = Keyword.merge(encoding_opts, Keyword.get(opts, :encoding_opts, []))
 
     with {:ok, env_id} <-
@@ -195,58 +204,60 @@ defmodule Snex do
   @doc """
   Shorthand for `Snex.pyeval/4`:
 
-      # when given a `code` string:
-      Snex.pyeval(env, code, %{} = _additional_vars, [] = _opts)
+      # with `t:code/0`:
+      Snex.pyeval(env_or_interpreter, code, %{} = _additional_vars, [] = _opts)
 
-      # when given an `additional_vars` map:
-      Snex.pyeval(env, nil = _code, additional_vars, [] = _opts)
+      # with `t:additional_vars/0`:
+      Snex.pyeval(env_or_interpreter, nil = _code, additional_vars, [] = _opts)
 
-      # when given an `opts` list:
-      Snex.pyeval(env, nil = _code, %{} = _additional_vars, opts)
+      # with `opts/0` list:
+      Snex.pyeval(env_or_interpreter, nil = _code, %{} = _additional_vars, opts)
 
   """
   @spec pyeval(
-          Snex.Env.t(),
+          Snex.Env.t() | Snex.Interpreter.server(),
           code() | additional_vars() | [pyeval_opt()]
-        ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
-  def pyeval(%Snex.Env{} = env, code) when is_code(code),
-    do: pyeval(env, code, %{}, [])
+        ) ::
+          {:ok, any()} | {:error, Snex.Error.t() | any()}
+  def pyeval(env_or_interpreter, code) when is_code(code),
+    do: pyeval(env_or_interpreter, code, %{}, [])
 
-  def pyeval(%Snex.Env{} = env, additional_vars) when is_map(additional_vars),
-    do: pyeval(env, nil, additional_vars, [])
+  def pyeval(env_or_interpreter, additional_vars) when is_vars(additional_vars),
+    do: pyeval(env_or_interpreter, nil, additional_vars, [])
 
-  def pyeval(%Snex.Env{} = env, opts) when is_list(opts),
-    do: pyeval(env, nil, %{}, opts)
+  def pyeval(env_or_interpreter, opts) when is_opts(opts),
+    do: pyeval(env_or_interpreter, nil, %{}, opts)
 
   @doc """
   Shorthand for `Snex.pyeval/4`:
 
-      # when given code and an `additional_vars` map:
-      Snex.pyeval(env, code, additional_vars, [] = _opts)
+      # with `t:code/0` and `t:additional_vars/0`:
+      Snex.pyeval(env_or_interpreter, code, additional_vars, [] = _opts)
 
-      # when given code and an `opts` list:
-      Snex.pyeval(env, code, %{} = _additional_vars, opts)
+      # with `t:code/0` and `opts/0`:
+      Snex.pyeval(env_or_interpreter, code, %{} = _additional_vars, opts)
 
-      # when given an `additional_vars` map and an `opts` list:
-      Snex.pyeval(env, nil = _code, additional_vars, opts)
+      # with `t:additional_vars/0` and `t:opts/0`:
+      Snex.pyeval(env_or_interpreter, nil = _code, additional_vars, opts)
 
   """
-  @spec pyeval(
-          Snex.Env.t(),
-          code() | nil | additional_vars(),
-          additional_vars() | [pyeval_opt()]
-        ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
-  def pyeval(%Snex.Env{} = env, additional_vars, opts)
-      when is_map(additional_vars) and is_list(opts),
-      do: pyeval(env, nil, additional_vars, opts)
+  @spec pyeval(Snex.Env.t() | Snex.Interpreter.server(), code(), additional_vars()) ::
+          {:ok, any()} | {:error, Snex.Error.t() | any()}
+  def pyeval(env_or_interpreter, code, additional_vars)
+      when is_code(code) and is_vars(additional_vars),
+      do: pyeval(env_or_interpreter, code, additional_vars, [])
 
-  def pyeval(%Snex.Env{} = env, code, additional_vars)
-      when is_code(code) and is_map(additional_vars),
-      do: pyeval(env, code, additional_vars, [])
+  @spec pyeval(Snex.Env.t() | Snex.Interpreter.server(), code(), [pyeval_opt()]) ::
+          {:ok, any()} | {:error, Snex.Error.t() | any()}
+  def pyeval(env_or_interpreter, code, opts)
+      when is_code(code) and is_opts(opts),
+      do: pyeval(env_or_interpreter, code, %{}, opts)
 
-  def pyeval(%Snex.Env{} = env, code, opts)
-      when is_code(code) and is_list(opts),
-      do: pyeval(env, code, %{}, opts)
+  @spec pyeval(Snex.Env.t() | Snex.Interpreter.server(), additional_vars(), [pyeval_opt()]) ::
+          {:ok, any()} | {:error, Snex.Error.t() | any()}
+  def pyeval(env_or_interpreter, additional_vars, opts)
+      when is_vars(additional_vars) and is_opts(opts),
+      do: pyeval(env_or_interpreter, nil, additional_vars, opts)
 
   @doc ~s'''
   Evaluates Python code in the given environment.
@@ -280,18 +291,27 @@ defmodule Snex do
 
   '''
   @spec pyeval(
-          Snex.Env.t(),
+          Snex.Env.t() | Snex.Interpreter.server(),
           code() | nil,
           additional_vars(),
           [pyeval_opt()]
         ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
-  def pyeval(%Snex.Env{} = env, code, additional_vars, opts)
-      when (is_code(code) or is_nil(code)) and is_map(additional_vars) and is_list(opts) do
+  def pyeval(env_or_interpreter, code, additional_vars, opts)
+      when (is_code(code) or is_nil(code)) and is_vars(additional_vars) and is_opts(opts) do
     check_additional_vars(additional_vars)
 
     returning =
       with ret when is_list(ret) <- opts[:returning],
            do: "[#{Enum.join(ret, ", ")}]"
+
+    {env, interpreter, %{encoding_opts: encoding_opts, port: port}} =
+      case env_or_interpreter do
+        %Snex.Env{} = env -> {env, env.interpreter, env}
+        interpreter -> {nil, interpreter, Snex.Interpreter.get_settings(interpreter)}
+      end
+
+    encoding_opts = Keyword.merge(encoding_opts, Keyword.get(opts, :encoding_opts, []))
+    timeout = Keyword.get(opts, :timeout, to_timeout(second: 5))
 
     command =
       %Commands.Eval{
@@ -301,10 +321,7 @@ defmodule Snex do
         returning: Snex.Code.wrap(returning)
       }
 
-    encoding_opts = Keyword.merge(env.encoding_opts, Keyword.get(opts, :encoding_opts, []))
-    timeout = Keyword.get(opts, :timeout, to_timeout(second: 5))
-
-    Snex.Interpreter.command(env.interpreter, env.port, command, encoding_opts, timeout)
+    Snex.Interpreter.command(interpreter, port, command, encoding_opts, timeout)
   end
 
   defp check_additional_vars(additional_vars) do
