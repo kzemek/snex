@@ -129,7 +129,7 @@
 
 - **Move Snex interface code to a public module `snex`**
 
-  You can now import `snex` module from your external Python code to get awarness of Snex Python-side types and interface.
+  You can now import `snex` module from your external Python code to get awareness of Snex Python-side types and interface.
 
 ## 0.2.0
 
