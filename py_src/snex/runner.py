@@ -23,7 +23,6 @@ from .models import (
     InResponse,
     MakeEnvCommand,
     OkResponse,
-    OkValueResponse,
     OutResponse,
     generate_id,
 )
@@ -68,10 +67,10 @@ async def run_init(cmd: InitCommand) -> OkResponse:
     if cmd["code"]:
         await run_code(cmd["code"], root_env, "exec")
 
-    return OkResponse(status="ok")
+    return OkResponse(status="ok", value=None)
 
 
-def run_make_env(cmd: MakeEnvCommand) -> OkValueResponse | ErrorResponse:
+def run_make_env(cmd: MakeEnvCommand) -> OkResponse | ErrorResponse:
     env = root_env.copy()
 
     for from_env_cmd in cmd["from_env"]:
@@ -99,10 +98,10 @@ def run_make_env(cmd: MakeEnvCommand) -> OkValueResponse | ErrorResponse:
     env_id = EnvID(generate_id())
     envs[env_id] = env
 
-    return OkValueResponse(status="ok_value", value=env_id)
+    return OkResponse(status="ok", value=env_id)
 
 
-async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResponse:
+async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
     env_id = cmd["env"]
     try:
         env = envs[env_id]
@@ -120,9 +119,9 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | OkValueResponse | ErrorResp
 
     if cmd["returning"]:
         value = await run_code(cmd["returning"], env, "eval")
-        return OkValueResponse(status="ok_value", value=value)
+        return OkResponse(status="ok", value=value)
 
-    return OkResponse(status="ok")
+    return OkResponse(status="ok", value=None)
 
 
 def run_gc(cmd: GCCommand) -> None:

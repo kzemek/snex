@@ -1,3 +1,13 @@
+## 0.4.0 (Unreleased)
+
+### Breaking
+
+- **`Snex.pyeval/4` no longer returns bare `:ok`**
+
+  `Snex.pyeval/4` now always returns either `{:ok, value}` or `{:error, reason}`.
+  It always felt wrong to have a result shape that depended on passed options.
+  Most importantly, this change fits well with the removal of `:returning`.
+
 ## 0.3.2
 
 ### Fixes

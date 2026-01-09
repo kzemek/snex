@@ -159,7 +159,7 @@ defmodule Snex.ClusterTest do
       {:ok, agent} = Agent.start_link(fn -> 0 end, name: TestAgent)
       {:ok, env} = Snex.make_env(remote_interpreter)
 
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(
                  env,
                  "snex.cast('Elixir.Agent', 'update', [agent, update_fn], node=this_node)",
