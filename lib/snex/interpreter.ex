@@ -283,7 +283,7 @@ defmodule Snex.Interpreter do
     task =
       Task.Supervisor.async_nolink(Snex.Internal.TaskSupervisor, fn ->
         case Snex.Serde.decode(data) do
-          {:ok, %{"command" => cmd, "module" => m, "function" => f, "args" => a, "node" => node}} ->
+          {:ok, %{"type" => cmd, "module" => m, "function" => f, "args" => a, "node" => node}} ->
             result = call_or_cast(cmd, to_atom(m), to_atom(f), a, to_atom(node))
             (cmd == "call" && {:reply, result}) || :noreply
 

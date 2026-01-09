@@ -43,13 +43,13 @@ async def run_code(
     mode: Literal["exec", "eval"],
 ) -> object:
     line_offset = code["line"] - 1
-    if code["code"] and code["code"][-1] == "\n":
+    if code["src"] and code["src"][-1] == "\n":
         # heuristic: if the code ends with a newline, then assume we're
         # in a heredoc. In that case, code starts at next line.
         line_offset += 1
 
     # offset the actual code for accurate line reporting
-    code_str = "\n" * line_offset + code["code"]
+    code_str = "\n" * line_offset + code["src"]
 
     flags = 0 if mode == "eval" else ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     code_obj = compile(code_str, code["file"], mode, flags=flags)
@@ -128,29 +128,29 @@ def run_gc(cmd: GCCommand) -> None:
     envs.pop(cmd["env"], None)
 
 
-async def run(req_id: bytes, data: InRequest | InResponse) -> OutResponse | None:
+async def run(req_id: bytes, command: InRequest | InResponse) -> OutResponse | None:
     result: OutResponse | None = None
 
-    if data["command"] == "init":
-        result = await run_init(data)
+    if command["type"] == "init":
+        result = await run_init(command)
 
-    elif data["command"] == "make_env":
-        result = run_make_env(data)
+    elif command["type"] == "make_env":
+        result = run_make_env(command)
 
-    elif data["command"] == "eval":
-        result = await run_eval(data)
+    elif command["type"] == "eval":
+        result = await run_eval(command)
 
-    elif data["command"] == "gc":
-        run_gc(data)
+    elif command["type"] == "gc":
+        run_gc(command)
 
-    elif data["command"] == "call_response" or data["command"] == "call_error_response":
-        interface.on_call_response(req_id, data)
+    elif command["type"] == "call_response" or command["type"] == "call_error_response":
+        interface.on_call_response(req_id, command)
 
     else:
         result = ErrorResponse(
             status="error",
             code="internal_error",
-            reason=f"Unknown command: {data}",
+            reason=f"Unknown command: {command}",
         )
 
     return result

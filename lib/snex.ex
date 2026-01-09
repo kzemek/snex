@@ -249,7 +249,7 @@ defmodule Snex do
       do: pyeval(env, code, %{}, opts)
 
   @doc ~s'''
-  Evaluates a Python code string in the given environment.
+  Evaluates Python code in the given environment.
 
   `additional_vars` are added to the environment before the code is executed.
   See `Snex.make_env/3` for more information.

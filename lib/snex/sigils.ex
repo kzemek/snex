@@ -26,13 +26,13 @@ defmodule Snex.Sigils do
   Note: using interpolation with multi-line strings will break the mapping between what Python
   thinks is the line number, and the actual line number in the Elixir source file.
   """
-  defmacro sigil_p(code, _opts) do
+  defmacro sigil_p(src, _opts) do
     location = Macro.Env.location(__CALLER__)
     file = location[:file]
     line = location[:line]
 
     quote do
-      %Snex.Code{code: unquote(code), file: unquote(file), line: unquote(line)}
+      %Snex.Code{src: unquote(src), file: unquote(file), line: unquote(line)}
     end
   end
 
@@ -42,9 +42,9 @@ defmodule Snex.Sigils do
   Returns a `%Snex.Code{}` struct built from the given code, without interpolations
   and without unescaping characters.
   """
-  defmacro sigil_P(code, opts) do
+  defmacro sigil_P(src, opts) do
     quote do
-      sigil_p(unquote(code), unquote(opts))
+      sigil_p(unquote(src), unquote(opts))
     end
   end
 end
