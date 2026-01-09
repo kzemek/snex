@@ -633,7 +633,7 @@ defmodule Snex.SerdeTest do
 
   describe "Python snex.set_custom_encoder()" do
     test "can encode custom objects", %{env: env} do
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(env, """
                def custom_encoder(obj):
                    if type(obj) is datetime.date:

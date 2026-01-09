@@ -30,7 +30,7 @@ defmodule SnexTest do
 
   describe "from_env" do
     test "can create a new environment from an existing environment", %{env: env} do
-      :ok = Snex.pyeval(env, "x = 1")
+      {:ok, nil} = Snex.pyeval(env, "x = 1")
       assert {:ok, new_env} = Snex.make_env(from: env)
       assert {:ok, 1} = Snex.pyeval(new_env, returning: "x")
     end
@@ -38,7 +38,7 @@ defmodule SnexTest do
 
   describe "sending" do
     test "can send from Python", %{env: env} do
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(env, "snex.send(self, b'hello from snex')", %{
                  "self" => Snex.Serde.term(self())
                })
@@ -49,7 +49,7 @@ defmodule SnexTest do
     test "can use atoms and tuples as send destinations", %{env: env} do
       Process.register(self(), :test_send_destination)
 
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(
                  env,
                  "snex.send(snex.Atom('test_send_destination'), b'hello from snex')"
@@ -61,7 +61,7 @@ defmodule SnexTest do
     test "can use tuples and snex.Term as send destinations", %{env: env} do
       Process.register(self(), :test_sendt_destination)
 
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(
                  env,
                  "snex.send((snex.Atom('test_sendt_destination'), node), b'hello from snex')",
@@ -131,7 +131,7 @@ defmodule SnexTest do
     test "can cast to Elixir functions without waiting for response", %{env: env} do
       {:ok, agent} = Agent.start_link(fn -> 0 end)
 
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(
                  env,
                  "snex.cast(snex.Atom('Elixir.Agent'), snex.Atom('update'), [agent, update_fn])",
@@ -149,7 +149,7 @@ defmodule SnexTest do
     end
 
     test "can cast with string module/function names", %{env: env} do
-      assert :ok =
+      assert {:ok, nil} =
                Snex.pyeval(
                  env,
                  "snex.cast('Elixir.Kernel', 'send', [target, b'cast_message'])",
@@ -331,7 +331,7 @@ defmodule SnexTest do
     end
 
     test "accepts empty code", %{env: env} do
-      assert :ok = Snex.pyeval(env, ~p"")
+      assert {:ok, nil} = Snex.pyeval(env, ~p"")
     end
   end
 end

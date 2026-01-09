@@ -80,10 +80,6 @@ class GCCommand(TypedDict):
 
 class OkResponse(TypedDict):
     status: Literal["ok"]
-
-
-class OkValueResponse(TypedDict):
-    status: Literal["ok_value"]
     value: object
 
 
@@ -134,4 +130,4 @@ class ErrorResponse(TypedDict):
 InRequest = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
 InResponse = CallResponse | CallErrorResponse
 OutRequest = SendCommand | CallCommand | CastCommand
-OutResponse = OkResponse | OkValueResponse | ErrorResponse
+OutResponse = OkResponse | ErrorResponse

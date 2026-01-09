@@ -208,7 +208,7 @@ defmodule Snex do
   @spec pyeval(
           Snex.Env.t(),
           code() | additional_vars() | [pyeval_opt()]
-        ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(%Snex.Env{} = env, code) when is_code(code),
     do: pyeval(env, code, %{}, [])
 
@@ -235,7 +235,7 @@ defmodule Snex do
           Snex.Env.t(),
           code() | nil | additional_vars(),
           additional_vars() | [pyeval_opt()]
-        ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(%Snex.Env{} = env, additional_vars, opts)
       when is_map(additional_vars) and is_list(opts),
       do: pyeval(env, nil, additional_vars, opts)
@@ -254,7 +254,7 @@ defmodule Snex do
   `additional_vars` are added to the environment before the code is executed.
   See `Snex.make_env/3` for more information.
 
-  Returns `:ok` on success, or a tuple `{:ok, result}` if `:returning` option is provided.
+  Returns `{:ok, result}` on success. If `:returning` option is not provided, `result` will be `nil`.
 
   ## Options
 
@@ -284,7 +284,7 @@ defmodule Snex do
           code() | nil,
           additional_vars(),
           [pyeval_opt()]
-        ) :: :ok | {:ok, any()} | {:error, Snex.Error.t() | any()}
+        ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(%Snex.Env{} = env, code, additional_vars, opts)
       when (is_code(code) or is_nil(code)) and is_map(additional_vars) and is_list(opts) do
     check_additional_vars(additional_vars)

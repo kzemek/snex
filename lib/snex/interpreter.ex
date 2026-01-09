@@ -405,7 +405,8 @@ defmodule Snex.Interpreter do
 
     receive do
       {^port, {:data, <<^id::binary, @response, response::binary>>}} ->
-        :ok = decode_reply(response)
+        {:ok, nil} = decode_reply(response)
+        :ok
 
       {^port, {:exit_status, _status} = reason} ->
         {:error, Snex.Error.exception(code: :interpreter_exited, reason: reason)}
@@ -449,10 +450,7 @@ defmodule Snex.Interpreter do
 
   defp reply_to_result(reply) do
     case reply do
-      %{"status" => "ok"} ->
-        :ok
-
-      %{"status" => "ok_value", "value" => value} ->
+      %{"status" => "ok", "value" => value} ->
         {:ok, value}
 
       %{"status" => "error", "code" => code, "reason" => reason} = data ->

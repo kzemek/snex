@@ -162,12 +162,13 @@ Reusing a single environment, you can use variables defined in the previous `Sne
 {:ok, inp} = Snex.Interpreter.start_link()
 {:ok, env} = Snex.make_env(inp)
 
-# `pyeval` does not return a value if not given a `returning` opt
-:ok = Snex.pyeval(env, "x = 10")
+# `pyeval` returns the value of the `:returning` option expression. If there's
+# no `:returning` option, the success return value will always be `nil`
+{:ok, nil} = Snex.pyeval(env, "x = 10")
 
-# additional data can be provided for `pyeval` to put in the environment
+# additional variables can be provided for `pyeval` to put in the environment
 # before running the code
-:ok = Snex.pyeval(env, "y = x * z", %{"z" => 2})
+{:ok, nil} = Snex.pyeval(env, "y = x * z", %{"z" => 2})
 
 # `pyeval` can also be called with `:returning` opt alone
 {:ok, [10, 20, 2]} = Snex.pyeval(env, returning: ["x", "y", "z"])
@@ -191,7 +192,7 @@ Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environ
     oldest_env,
     {older_env, only: ["pool"]},
     {old_env, except: ["pool"]}
-  ]))
+  ])
   ```
 
 - **setting some initial variables (taking precedence over variables from `:from`)**
@@ -401,7 +402,7 @@ A good way to run any blocking code is to prepare and use your own thread or pro
 {:ok, inp} = Snex.Interpreter.start_link()
 {:ok, pool_env} = Snex.make_env(inp)
 
-:ok =
+{:ok, nil} =
   Snex.pyeval(pool_env, """
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
@@ -543,7 +544,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(env, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 544, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 545, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` (`code` argument and `:returning` opt) and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
