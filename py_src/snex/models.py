@@ -68,7 +68,7 @@ class MakeEnvCommand(TypedDict):
 class EvalCommand(TypedDict):
     type: Literal["eval"]
     code: Code | None
-    env: EnvID
+    env: EnvID | None
     returning: Code | None
     additional_vars: dict[str, object]
 

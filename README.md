@@ -38,11 +38,10 @@ end
 ```
 
 ```elixir
-{:ok, inp} = SnexTest.NumpyInterpreter.start_link(init_script: "import numpy as np")
-{:ok, env} = Snex.make_env(inp)
+{:ok, interpreter} = SnexTest.NumpyInterpreter.start_link(init_script: "import numpy as np")
 
 {:ok, 4.242640687119285} =
-  Snex.pyeval(env, """
+  Snex.pyeval(interpreter, """
     width = await snex.call("Elixir.Kernel", "div", [height, 2])
     matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (width, height), dtype=int)
     """, %{"height" => 6}, returning: "np.linalg.norm(matrix)")
@@ -112,9 +111,7 @@ Each `Snex.Interpreter` (BEAM) process manages a separate Python (OS) process.
 
 ```elixir
 {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
-{:ok, env} = Snex.make_env(interpreter)
-
-{:ok, "hello world!"} = Snex.pyeval(env, "x = 'hello world!'", returning: "x")
+{:ok, "hello world!"} = Snex.pyeval(interpreter, "x = 'hello world!'", returning: "x")
 ```
 
 ### `Snex.pyeval`
@@ -124,10 +121,9 @@ This is the function that runs Python code, returns data from the interpreter, a
 
 ```elixir
 {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
-{:ok, %Snex.Env{} = env} = Snex.make_env(interpreter)
 
 {:ok, 6.0} =
-  Snex.pyeval(env, """
+  Snex.pyeval(interpreter, """
     import numpy as np
     matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (6, 6), dtype=int)
     scalar = np.linalg.norm(matrix)
@@ -138,9 +134,8 @@ The `:returning` option can take any valid Python expression, or an Elixir list 
 
 ```elixir
 {:ok, interpreter} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(interpreter)
 
-{:ok, [3, 6, 9]} = Snex.pyeval(env, "x = 3", returning: ["x", "x*2", "x**2"])
+{:ok, [3, 6, 9]} = Snex.pyeval(interpreter, "x = 3", returning: ["x", "x*2", "x**2"])
 ```
 
 ### Environments
@@ -340,10 +335,8 @@ end
   snex.set_custom_encoder(custom_encoder)
   """)
 
-{:ok, env} = Snex.make_env(inp)
-
 {:ok, {{"datetime", "date"}, %Date{year: 2026, month: 12, day: 27}}} =
-  Snex.pyeval(env, """
+  Snex.pyeval(inp, """
     typ = type(date)
     next_date = date + datetime.timedelta(days=364)
     """,
@@ -381,10 +374,9 @@ You can include async functions in your snippets and await them on the top level
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(inp)
 
 {:ok, ["hello"]} =
-  Snex.pyeval(env, """
+  Snex.pyeval(inp, """
     import asyncio
     async def do_thing():
         await asyncio.sleep(0.01)
@@ -507,13 +499,11 @@ They also accept an optional `node` argument to apply the function on a remote n
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(inp)
-
 {:ok, agent} = Agent.start_link(fn -> 42 end)
 
 {:ok, 42} =
   Snex.pyeval(
-    env,
+    inp,
     "result = await snex.call('Elixir.Agent', 'get', [agent, identity])",
     %{"agent" => agent, "identity" => & &1},
     returning: "result"
@@ -527,9 +517,8 @@ When you inspect a stacktrace, or receive an exception result, your code will ha
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(inp)
 
-{:error, %Snex.Error{} = reason} = Snex.pyeval(env, "raise RuntimeError('nolocation')")
+{:error, %Snex.Error{} = reason} = Snex.pyeval(inp, "raise RuntimeError('nolocation')")
 
 ~s'  File "<Snex.Code>", line 1, in <module>\n' = Enum.at(reason.traceback, -2)
 ```
@@ -540,11 +529,10 @@ To help with that, Snex defines sigils `~p` and `~P` that annotate your code wit
 import Snex.Sigils
 
 {:ok, inp} = Snex.Interpreter.start_link()
-{:ok, env} = Snex.make_env(inp)
 
-{:error, %Snex.Error{} = reason} = Snex.pyeval(env, ~p"raise RuntimeError('nolocation')")
+{:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 545, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 533, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` (`code` argument and `:returning` opt) and `Snex.Interpreter.start_link/1`'s `:init_script` opt.

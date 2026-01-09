@@ -94,7 +94,7 @@ defmodule Snex.Internal.Commands.Eval do
 
   @type t :: %__MODULE__{
           code: Snex.Code.t() | nil,
-          env: Snex.Env.t(),
+          env: Snex.Env.t() | nil,
           returning: Snex.Code.t() | nil,
           additional_vars: %{optional(String.t()) => term()}
         }
@@ -112,7 +112,7 @@ defmodule Snex.Internal.Commands.Eval do
       Snex.Serde.encode_to_iodata!(%{
         "type" => "eval",
         "code" => command.code,
-        "env" => Snex.Serde.binary(command.env.id, :bytes),
+        "env" => if(command.env, do: Snex.Serde.binary(command.env.id, :bytes)),
         "returning" => command.returning,
         "additional_vars" =>
           Map.new(command.additional_vars, fn {k, v} ->

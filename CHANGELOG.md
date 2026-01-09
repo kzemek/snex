@@ -8,6 +8,13 @@
   It always felt wrong to have a result shape that depended on passed options.
   Most importantly, this change fits well with the removal of `:returning`.
 
+### Features
+
+- **`Snex.pyeval/4` can be called with interpreter instead of `%Snex.Env{}`**
+
+  Simplifies setup for one-off commands.
+  `pyeval` without a `Snex.Env` is less performant due to additional interprocess communication, but cutting a `make_env` Python call makes up for it when running just a few commands.
+
 ### Changes
 
 - **Set line location with `ast` manipulation & cache code compilation**
