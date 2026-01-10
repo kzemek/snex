@@ -24,17 +24,18 @@ from .models import (
     generate_id,
 )
 
-ID_LEN_BYTES = 16
+Envs = dict[EnvID, dict[str, object]]
 
-root_env: dict[str, object] = {"snex": snex, "_SnexReturn": code.SnexReturn}
-envs: dict[EnvID, dict[str, object]] = {}
+ID_LEN_BYTES = 16
+ROOT_ENV_ID = EnvID(b"root")
 
 
 def env_id_to_str(env_id: EnvID) -> str:
     return base64.b64encode(env_id).decode()
 
 
-async def run_init(cmd: InitCommand) -> OkResponse:
+async def run_init(cmd: InitCommand, envs: Envs) -> OkResponse:
+    root_env = envs[ROOT_ENV_ID]
     root_env.update(cmd["additional_vars"])
 
     if cmd["code"]:
@@ -43,8 +44,8 @@ async def run_init(cmd: InitCommand) -> OkResponse:
     return OkResponse(status="ok", value=None)
 
 
-def run_make_env(cmd: MakeEnvCommand) -> OkResponse | ErrorResponse:
-    env = root_env.copy()
+def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
+    env = envs[ROOT_ENV_ID].copy()
 
     for from_env_cmd in cmd["from_env"]:
         env_id = from_env_cmd["env"]
@@ -74,9 +75,9 @@ def run_make_env(cmd: MakeEnvCommand) -> OkResponse | ErrorResponse:
     return OkResponse(status="ok", value=env_id)
 
 
-async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
+async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
     if cmd["env"] is None:
-        env = root_env.copy()
+        env = envs[ROOT_ENV_ID].copy()
     else:
         env_id = cmd["env"]
         try:
@@ -96,24 +97,28 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
     return OkResponse(status="ok", value=value)
 
 
-def run_gc(cmd: GCCommand) -> None:
+def run_gc(cmd: GCCommand, envs: Envs) -> None:
     envs.pop(cmd["env"], None)
 
 
-async def run(req_id: bytes, command: InRequest | InResponse) -> OutResponse | None:
+async def run(
+    req_id: bytes,
+    command: InRequest | InResponse,
+    envs: Envs,
+) -> OutResponse | None:
     result: OutResponse | None = None
 
     if command["type"] == "init":
-        result = await run_init(command)
+        result = await run_init(command, envs)
 
     elif command["type"] == "make_env":
-        result = run_make_env(command)
+        result = run_make_env(command, envs)
 
     elif command["type"] == "eval":
-        result = await run_eval(command)
+        result = await run_eval(command, envs)
 
     elif command["type"] == "gc":
-        run_gc(command)
+        run_gc(command, envs)
 
     elif command["type"] == "call_response" or command["type"] == "call_error_response":
         interface.on_call_response(req_id, command)
@@ -163,6 +168,7 @@ def on_task_done(
 async def run_loop() -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
+    envs: Envs = {ROOT_ENV_ID: {"snex": snex, "_SnexReturn": code.SnexReturn}}
 
     reader, writer = await transport.setup_io(loop)
     interface.init(writer)
@@ -194,7 +200,7 @@ async def run_loop() -> None:
 
             command: InRequest = pickle.loads(all_data[17:])  # noqa: S301
 
-            task = loop.create_task(run(req_id, command))
+            task = loop.create_task(run(req_id, command, envs))
             running_tasks.add(task)
             task.add_done_callback(
                 functools.partial(on_task_done, writer, req_id, running_tasks),
