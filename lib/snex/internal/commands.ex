@@ -95,12 +95,11 @@ defmodule Snex.Internal.Commands.Eval do
   @type t :: %__MODULE__{
           code: Snex.Code.t() | nil,
           env: Snex.Env.t() | nil,
-          returning: Snex.Code.t() | nil,
           additional_vars: %{optional(String.t()) => term()}
         }
 
   @enforce_keys [:code, :env]
-  defstruct [:code, :env, returning: nil, additional_vars: %{}]
+  defstruct [:code, :env, additional_vars: %{}]
 
   defimpl Snex.Internal.Command do
     @impl Snex.Internal.Command
@@ -113,7 +112,6 @@ defmodule Snex.Internal.Commands.Eval do
         "type" => "eval",
         "code" => command.code,
         "env" => if(command.env, do: Snex.Serde.binary(command.env.id, :bytes)),
-        "returning" => command.returning,
         "additional_vars" =>
           Map.new(command.additional_vars, fn {k, v} ->
             {k, Snex.Serde.encode_fragment!(v, user_encoding_opts)}

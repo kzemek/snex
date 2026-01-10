@@ -69,7 +69,6 @@ class EvalCommand(TypedDict):
     type: Literal["eval"]
     code: Code | None
     env: EnvID | None
-    returning: Code | None
     additional_vars: dict[str, object]
 
 

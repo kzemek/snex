@@ -26,7 +26,7 @@ from .models import (
 
 ID_LEN_BYTES = 16
 
-root_env: dict[str, object] = {}
+root_env: dict[str, object] = {"snex": snex, "_SnexReturn": code.SnexReturn}
 envs: dict[EnvID, dict[str, object]] = {}
 
 
@@ -91,13 +91,9 @@ async def run_eval(cmd: EvalCommand) -> OkResponse | ErrorResponse:
     env.update(cmd["additional_vars"])
 
     if cmd["code"]:
-        await code.run_exec(cmd["code"], env)
+        value = await code.run_exec(cmd["code"], env)
 
-    if cmd["returning"]:
-        value = code.run_eval(cmd["returning"], env)
-        return OkResponse(status="ok", value=value)
-
-    return OkResponse(status="ok", value=None)
+    return OkResponse(status="ok", value=value)
 
 
 def run_gc(cmd: GCCommand) -> None:
@@ -170,7 +166,6 @@ async def run_loop() -> None:
 
     reader, writer = await transport.setup_io(loop)
     interface.init(writer)
-    root_env["snex"] = snex
 
     while True:
         try:

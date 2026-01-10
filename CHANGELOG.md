@@ -2,6 +2,11 @@
 
 ### Breaking
 
+- **`Snex.pyeval/4` can execute code with Python `return` statements; no longer accepts `:returning`**
+
+  `Snex.pyeval/4` is now able to parse and execute `return` statements in Python code.
+  This completely obsoletes the `:returning` option, so it's removed with a major version bump.
+
 - **`Snex.pyeval/4` no longer returns bare `:ok`**
 
   `Snex.pyeval/4` now always returns either `{:ok, value}` or `{:error, reason}`.

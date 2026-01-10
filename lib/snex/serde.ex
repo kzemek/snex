@@ -87,8 +87,9 @@ defmodule Snex.Serde do
   ## Example
 
       {:ok, "date"} =
-        Snex.pyeval(env, %{"d" => Snex.Serde.object("datetime", "date", [2025, 12, 28])},
-          returning: "type(d).__name__")
+        Snex.pyeval(env,
+          "return type(d).__name__",
+          %{"d" => Snex.Serde.object("datetime", "date", [2025, 12, 28])})
   '''
   @spec object(String.t(), String.t(), list()) :: serde_object()
   def object(module, classname, args)

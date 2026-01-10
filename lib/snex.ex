@@ -52,8 +52,7 @@ defmodule Snex do
   Option for `Snex.pyeval/4`.
   """
   @type pyeval_opt ::
-          {:returning, [code()] | code()}
-          | {:timeout, timeout()}
+          {:timeout, timeout()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
 
   @type env_or_interpreter :: Snex.Env.t() | Snex.Interpreter.server()
@@ -225,9 +224,6 @@ defmodule Snex do
   def pyeval(env_or_interpreter, additional_vars) when is_vars(additional_vars),
     do: pyeval(env_or_interpreter, nil, additional_vars, [])
 
-  def pyeval(env_or_interpreter, opts) when is_opts(opts),
-    do: pyeval(env_or_interpreter, nil, %{}, opts)
-
   @doc """
   Shorthand for `Snex.pyeval/4`:
 
@@ -265,12 +261,9 @@ defmodule Snex do
   `additional_vars` are added to the environment before the code is executed.
   See `Snex.make_env/3` for more information.
 
-  Returns `{:ok, result}` on success. If `:returning` option is not provided, `result` will be `nil`.
+  Returns `{:ok, result}` on success. If the code does not return a value, `result` will be `nil`.
 
   ## Options
-
-    * `:returning` - a Python expression or a list of Python expressions to evaluate and return from
-      this function. If not provided, the result will be `:ok`.
 
     * `:timeout` - the timeout for the evaluation. Can be a `timeout()` or `:infinity`.
       Default: 5 seconds.
@@ -284,8 +277,8 @@ defmodule Snex do
   ## Examples
 
       Snex.pyeval(env, """
-        res = [x for x in range(num_range)]
-        """, %{"num_range" => 6}, returning: "[x * x for x in res]")
+        return [x * x for x in range(num_range)]
+        """, %{"num_range" => 6}")
 
       [0, 1, 4, 9, 16, 25]
 
@@ -298,11 +291,12 @@ defmodule Snex do
         ) :: {:ok, any()} | {:error, Snex.Error.t() | any()}
   def pyeval(env_or_interpreter, code, additional_vars, opts)
       when (is_code(code) or is_nil(code)) and is_vars(additional_vars) and is_opts(opts) do
-    check_additional_vars(additional_vars)
+    if Keyword.get(opts, :returning, false) do
+      raise ArgumentError,
+            "`:returning` is no longer supported; use plain Python `return` statements instead"
+    end
 
-    returning =
-      with ret when is_list(ret) <- opts[:returning],
-           do: "[#{Enum.join(ret, ", ")}]"
+    check_additional_vars(additional_vars)
 
     {env, interpreter, %{encoding_opts: encoding_opts, port: port}} =
       case env_or_interpreter do
@@ -317,8 +311,7 @@ defmodule Snex do
       %Commands.Eval{
         code: Snex.Code.wrap(code),
         env: env,
-        additional_vars: additional_vars,
-        returning: Snex.Code.wrap(returning)
+        additional_vars: additional_vars
       }
 
     Snex.Interpreter.command(interpreter, port, command, encoding_opts, timeout)
