@@ -2,6 +2,8 @@ defmodule SnexTest do
   use ExUnit.Case, async: true
   use MarkdownDoctest
 
+  import ExUnit.CaptureIO
+
   import Snex.Sigils
 
   markdown_doctest "README.md",
@@ -32,7 +34,7 @@ defmodule SnexTest do
     test "can create a new environment from an existing environment", %{env: env} do
       {:ok, nil} = Snex.pyeval(env, "x = 1")
       assert {:ok, new_env} = Snex.make_env(from: env)
-      assert {:ok, 1} = Snex.pyeval(new_env, returning: "x")
+      assert {:ok, 1} = Snex.pyeval(new_env, "return x")
     end
   end
 
@@ -79,9 +81,11 @@ defmodule SnexTest do
       assert {:ok, 42} =
                Snex.pyeval(
                  env,
-                 "result = await snex.call(snex.Atom('Elixir.Agent'), snex.Atom('get'), [agent, identity])",
-                 %{"agent" => agent, "identity" => &Function.identity/1},
-                 returning: "result"
+                 """
+                 result = await snex.call(snex.Atom('Elixir.Agent'), snex.Atom('get'), [agent, identity])
+                 return result
+                 """,
+                 %{"agent" => agent, "identity" => &Function.identity/1}
                )
     end
 
@@ -89,8 +93,10 @@ defmodule SnexTest do
       assert {:ok, 3} =
                Snex.pyeval(
                  env,
-                 "result = await snex.call('Elixir.Kernel', 'length', [[1, 2, 3]])",
-                 returning: "result"
+                 """
+                 result = await snex.call('Elixir.Kernel', 'length', [[1, 2, 3]])
+                 return result
+                 """
                )
     end
 
@@ -120,9 +126,9 @@ defmodule SnexTest do
                    snex.call("Elixir.Agent", "get_and_update", [agent, fun]),
                    snex.call("Elixir.Agent", "get_and_update", [agent, fun])
                  )
+                 return results
                  """,
-                 %{"agent" => agent, "fun" => &{&1 + 1, &1 + 1}},
-                 returning: "results"
+                 %{"agent" => agent, "fun" => &{&1 + 1, &1 + 1}}
                )
     end
   end
@@ -160,19 +166,31 @@ defmodule SnexTest do
     end
   end
 
-  describe "returning" do
+  describe "returning (deprecated)" do
     test "return an Elixir list of a single value", %{env: env} do
-      assert {:ok, [42]} = Snex.pyeval(env, returning: ["42"])
+      io =
+        capture_io(:stderr, fn ->
+          assert {:ok, [42]} = Snex.pyeval(env, returning: ["42"])
+        end)
+
+      assert io =~ "`:returning` is deprecated; use plain Python `return` statements"
+      # Has our test's stack trace, but not Snex's
+      assert io =~ ~r'test/snex_test.exs:\d+: anonymous fn/1 in SnexTest."test returning'
+      refute io =~ ~r'lib/snex.ex'
     end
   end
 
   describe "error handling" do
-    test "unserializable value in :returning", %{env: env} do
+    test "unserializable return value", %{env: env} do
       assert {:error,
               %Snex.Error{
                 code: :python_runtime_error,
                 reason: "Cannot serialize object of <class 'module'>"
-              }} = Snex.pyeval(env, "import datetime", returning: "datetime")
+              }} =
+               Snex.pyeval(env, """
+               import datetime
+               return datetime
+               """)
     end
 
     test "the interpreter exits if Port fails to start" do
@@ -229,7 +247,7 @@ defmodule SnexTest do
     test "can run a init script with additional variables" do
       {:ok, inp} = Snex.Interpreter.start_link(init_script: {"y = 2 * x", %{"x" => 3}})
       {:ok, env} = Snex.make_env(inp)
-      assert {:ok, {3, 6}} = Snex.pyeval(env, returning: "x, y")
+      assert {:ok, {3, 6}} = Snex.pyeval(env, "return x, y")
     end
   end
 
@@ -273,7 +291,7 @@ defmodule SnexTest do
         )
 
       {:ok, env} = Snex.make_env(inp)
-      assert {:ok, "42"} = Snex.pyeval(env, returning: "os.getenv('TESTVAR')")
+      assert {:ok, "42"} = Snex.pyeval(env, "return os.getenv('TESTVAR')")
     end
 
     test "can wrap the python executable with an MFA" do
@@ -284,7 +302,7 @@ defmodule SnexTest do
         )
 
       {:ok, env} = Snex.make_env(inp)
-      assert {:ok, "42"} = Snex.pyeval(env, returning: "os.getenv('TESTVAR')")
+      assert {:ok, "42"} = Snex.pyeval(env, "return os.getenv('TESTVAR')")
     end
 
     @spec wrap_with_env(String.t(), [String.t()]) :: {String.t(), [String.t()]}
@@ -332,6 +350,23 @@ defmodule SnexTest do
 
     test "accepts empty code", %{env: env} do
       assert {:ok, nil} = Snex.pyeval(env, ~p"")
+    end
+  end
+
+  describe "early returns" do
+    test "code is able to return early", %{env: env} do
+      code = ~P"""
+      if x > 0:
+        return "positive"
+      elif x < 0:
+        return "negative"
+
+      return "zero"
+      """
+
+      assert {:ok, "positive"} = Snex.pyeval(env, code, %{"x" => 1})
+      assert {:ok, "negative"} = Snex.pyeval(env, code, %{"x" => -1})
+      assert {:ok, "zero"} = Snex.pyeval(env, code, %{"x" => 0})
     end
   end
 end

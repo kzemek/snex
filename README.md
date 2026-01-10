@@ -44,7 +44,9 @@ end
   Snex.pyeval(interpreter, """
     width = await snex.call("Elixir.Kernel", "div", [height, 2])
     matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (width, height), dtype=int)
-    """, %{"height" => 6}, returning: "np.linalg.norm(matrix)")
+
+    return np.linalg.norm(matrix)
+    """, %{"height" => 6})
 ```
 
 ## Installation & Requirements
@@ -111,7 +113,7 @@ Each `Snex.Interpreter` (BEAM) process manages a separate Python (OS) process.
 
 ```elixir
 {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link()
-{:ok, "hello world!"} = Snex.pyeval(interpreter, "x = 'hello world!'", returning: "x")
+{:ok, "hello world!"} = Snex.pyeval(interpreter, "return 'hello world!'")
 ```
 
 ### `Snex.pyeval`
@@ -126,16 +128,8 @@ This is the function that runs Python code, returns data from the interpreter, a
   Snex.pyeval(interpreter, """
     import numpy as np
     matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (6, 6), dtype=int)
-    scalar = np.linalg.norm(matrix)
-    """, returning: "scalar")
-```
-
-The `:returning` option can take any valid Python expression, or an Elixir list of them:
-
-```elixir
-{:ok, interpreter} = Snex.Interpreter.start_link()
-
-{:ok, [3, 6, 9]} = Snex.pyeval(interpreter, "x = 3", returning: ["x", "x*2", "x**2"])
+    return np.linalg.norm(matrix)
+    """)
 ```
 
 ### Environments
@@ -157,16 +151,15 @@ Reusing a single environment, you can use variables defined in the previous `Sne
 {:ok, inp} = Snex.Interpreter.start_link()
 {:ok, env} = Snex.make_env(inp)
 
-# `pyeval` returns the value of the `:returning` option expression. If there's
-# no `:returning` option, the success return value will always be `nil`
+# `pyeval` returns the return value of the code block. If there's
+# no `return` statement, the success return value will always be `nil`
 {:ok, nil} = Snex.pyeval(env, "x = 10")
 
 # additional variables can be provided for `pyeval` to put in the environment
 # before running the code
 {:ok, nil} = Snex.pyeval(env, "y = x * z", %{"z" => 2})
 
-# `pyeval` can also be called with `:returning` opt alone
-{:ok, [10, 20, 2]} = Snex.pyeval(env, returning: ["x", "y", "z"])
+{:ok, {10, 20, 2}} = Snex.pyeval(env, "return (x, y, z)")
 ```
 
 Using `Snex.make_env/2` and `Snex.make_env/3`, you can also create a new environment:
@@ -214,7 +207,7 @@ The init script runs on interpreter startup, and prepares a "base" environment s
 {:ok, env} = Snex.make_env(inp)
 
 # The brand new `env` contains `np` and `my_var`
-{:ok, 42} = Snex.pyeval(env, returning: "int(np.array([my_var])[0])")
+{:ok, 42} = Snex.pyeval(env, "return int(np.array([my_var])[0])")
 ```
 
 If your init script takes significant time, you can pass `sync_start: false` to `start_link/1`.
@@ -239,7 +232,7 @@ end)
 
 :erpc.call(:"b@localhost", fn ->
   remote_env = Agent.get(env_agent, & &1)
-  {:ok, "hello from a@localhost!"} = Snex.pyeval(remote_env, returning: "hello")
+  {:ok, "hello from a@localhost!"} = Snex.pyeval(remote_env, "return hello")
 end)
 ```
 
@@ -339,9 +332,10 @@ end
   Snex.pyeval(inp, """
     typ = type(date)
     next_date = date + datetime.timedelta(days=364)
+
+    return ((typ.__module__, typ.__name__), next_date)
     """,
-    %{"date" => Date.new!(2025, 12, 28)},
-    returning: "((typ.__module__, typ.__name__), next_date)")
+    %{"date" => ~D[2025-12-28]})
 ```
 
 ### Releases
@@ -375,15 +369,15 @@ You can include async functions in your snippets and await them on the top level
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
 
-{:ok, ["hello"]} =
+{:ok, "hello"} =
   Snex.pyeval(inp, """
     import asyncio
     async def do_thing():
         await asyncio.sleep(0.01)
         return "hello"
 
-    result = await do_thing()
-    """, returning: ["result"])
+    return await do_thing()
+    """)
 ```
 
 #### Run blocking code
@@ -411,8 +405,8 @@ A good way to run any blocking code is to prepare and use your own thread or pro
     def blocking_io():
         return "world!"
 
-    res = await loop.run_in_executor(pool, blocking_io)
-    """, returning: "res")
+    return await loop.run_in_executor(pool, blocking_io)
+    """)
 ```
 
 #### Use your in-repo project
@@ -447,7 +441,11 @@ end
 {:ok, inp} = SnexTest.MyProject.start_link()
 {:ok, env} = Snex.make_env(inp)
 
-{:ok, "hi from bar"} = Snex.pyeval(env, "import foo", returning: "foo.bar()")
+{:ok, "hi from bar"} =
+  Snex.pyeval(env, """
+    import foo
+    return foo.bar()
+    """)
 ```
 
 #### Send messages from Python code
@@ -504,9 +502,8 @@ They also accept an optional `node` argument to apply the function on a remote n
 {:ok, 42} =
   Snex.pyeval(
     inp,
-    "result = await snex.call('Elixir.Agent', 'get', [agent, identity])",
-    %{"agent" => agent, "identity" => & &1},
-    returning: "result"
+    "return await snex.call('Elixir.Agent', 'get', [agent, identity])",
+    %{"agent" => agent, "identity" => & &1}
   )
 ```
 
@@ -532,10 +529,10 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 533, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 530, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
-All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` (`code` argument and `:returning` opt) and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
+All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
 
 As with other sigils, lowercase `~p` interpolates and parses escapes in the literal, while uppercase `~P` passes the literal as-is:
 

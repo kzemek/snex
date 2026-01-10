@@ -177,8 +177,8 @@ defmodule SnexTest.ReleaseTest do
               import dill
               import numpy
               x = dill.loads(dill.dumps(numpy.array([1, 2, 3])))
-              """,
-              returning: "str(x)"
+              return str(x)
+              """
             )
 
           {:error, :relocatable_test_done}

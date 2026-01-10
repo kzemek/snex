@@ -52,8 +52,7 @@ defmodule Snex do
   Option for `Snex.pyeval/4`.
   """
   @type pyeval_opt ::
-          {:returning, [code()] | code()}
-          | {:timeout, timeout()}
+          {:timeout, timeout()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
 
   @type env_or_interpreter :: Snex.Env.t() | Snex.Interpreter.server()
@@ -265,12 +264,9 @@ defmodule Snex do
   `additional_vars` are added to the environment before the code is executed.
   See `Snex.make_env/3` for more information.
 
-  Returns `{:ok, result}` on success. If `:returning` option is not provided, `result` will be `nil`.
+  Returns `{:ok, result}` on success. If the code does not return a value, `result` will be `nil`.
 
   ## Options
-
-    * `:returning` - a Python expression or a list of Python expressions to evaluate and return from
-      this function. If not provided, the result will be `:ok`.
 
     * `:timeout` - the timeout for the evaluation. Can be a `timeout()` or `:infinity`.
       Default: 5 seconds.
@@ -284,8 +280,8 @@ defmodule Snex do
   ## Examples
 
       Snex.pyeval(env, """
-        res = [x for x in range(num_range)]
-        """, %{"num_range" => 6}, returning: "[x * x for x in res]")
+        return [x * x for x in range(num_range)]
+        """, %{"num_range" => 6}")
 
       [0, 1, 4, 9, 16, 25]
 
@@ -300,9 +296,7 @@ defmodule Snex do
       when (is_code(code) or is_nil(code)) and is_vars(additional_vars) and is_opts(opts) do
     check_additional_vars(additional_vars)
 
-    returning =
-      with ret when is_list(ret) <- opts[:returning],
-           do: "[#{Enum.join(ret, ", ")}]"
+    {code, opts} = code |> Snex.Code.wrap() |> handle_deprecated_returning(opts)
 
     {env, interpreter, %{encoding_opts: encoding_opts, port: port}} =
       case env_or_interpreter do
@@ -312,16 +306,41 @@ defmodule Snex do
 
     encoding_opts = Keyword.merge(encoding_opts, Keyword.get(opts, :encoding_opts, []))
     timeout = Keyword.get(opts, :timeout, to_timeout(second: 5))
-
-    command =
-      %Commands.Eval{
-        code: Snex.Code.wrap(code),
-        env: env,
-        additional_vars: additional_vars,
-        returning: Snex.Code.wrap(returning)
-      }
+    command = %Commands.Eval{code: code, env: env, additional_vars: additional_vars}
 
     Snex.Interpreter.command(interpreter, port, command, encoding_opts, timeout)
+  end
+
+  defp handle_deprecated_returning(code, opts) do
+    case Keyword.pop(opts, :returning) do
+      {returning, opts} when is_code(returning) or is_list(returning) ->
+        {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+        stacktrace = Enum.drop(stacktrace, 3)
+        warn_once_key = {__MODULE__, :show_returning_warning, List.first(stacktrace)}
+
+        if :persistent_term.get(warn_once_key, true) do
+          IO.warn("`:returning` is deprecated; use plain Python `return` statements", stacktrace)
+          :persistent_term.put(warn_once_key, false)
+        end
+
+        returning =
+          if is_list(returning),
+            do: "[#{Enum.join(returning, ", ")}]",
+            else: returning
+
+        returning = Snex.Code.wrap(returning)
+        code = Snex.Code.wrap(code)
+
+        code =
+          if code,
+            do: %Snex.Code{code | src: "#{code.src}\nreturn #{returning.src}\n"},
+            else: %Snex.Code{returning | src: "return #{returning.src}"}
+
+        {code, opts}
+
+      _ ->
+        {code, opts}
+    end
   end
 
   defp check_additional_vars(additional_vars) do

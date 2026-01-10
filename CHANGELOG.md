@@ -6,9 +6,14 @@
 
   `Snex.pyeval/4` now always returns either `{:ok, value}` or `{:error, reason}`.
   It always felt wrong to have a result shape that depended on passed options.
-  Most importantly, this change fits well with the removal of `:returning`.
+  Most importantly, this change fits well with the deprecation of `:returning`.
 
 ### Features
+
+- **`Snex.pyeval/4` can execute code with Python `return` statements**
+
+  `Snex.pyeval/4` is now able to parse and execute `return` statements in Python code.
+  This obsoletes the `:returning` option, which now emits a deprecation warning.
 
 - **`Snex.pyeval/4` can be called with interpreter instead of `%Snex.Env{}`**
 

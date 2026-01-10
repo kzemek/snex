@@ -31,8 +31,14 @@ defmodule Snex.Sigils do
     file = location[:file]
     line = location[:line]
 
-    quote do
-      %Snex.Code{src: unquote(src), file: unquote(file), line: unquote(line)}
+    quote bind_quoted: [src: src, file: file, line: line] do
+      %Snex.Code{
+        src: src,
+        file: file,
+        # heuristic: if the code ends with a newline, then assume we're
+        # in a heredoc. In that case, code starts at next line from """
+        line: line + if(String.ends_with?(src, "\n"), do: 1, else: 0)
+      }
     end
   end
 

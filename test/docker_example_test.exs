@@ -29,6 +29,6 @@ defmodule Snex.DockerExampleTest do
       )
 
     {:ok, env} = Snex.make_env(interpreter)
-    {:ok, "snex-test-container"} = Snex.pyeval(env, returning: "socket.gethostname()")
+    {:ok, "snex-test-container"} = Snex.pyeval(env, "return socket.gethostname()")
   end
 end

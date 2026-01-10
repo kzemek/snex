@@ -175,7 +175,7 @@ defmodule Snex.Interpreter do
           {:ok, inp} = Snex.Interpreter.start_link(init_script: {"y = 2 * x", %{"x" => 3}})
           # Any new `env` will already contain `x` and `y`
           {:ok, env} = Snex.make_env(inp)
-          {:ok, {3, 6}} = Snex.pyeval(env, returning: "x, y")
+          {:ok, {3, 6}} = Snex.pyeval(env, "return x, y")
 
       Failing to run the script will cause the process initialization to fail.
 

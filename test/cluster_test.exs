@@ -45,12 +45,12 @@ defmodule Snex.ClusterTest do
 
         {:ok, local_env} = Snex.make_env(from: remote_env)
 
-        assert {:ok, 42} = Snex.pyeval(local_env, returning: "v")
+        assert {:ok, 42} = Snex.pyeval(local_env, "return v")
       end
 
       test "make_env on remote interpreter#{suffix}", %{remote_interpreter: remote_interpreter} do
         {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 123})
-        assert {:ok, 123} = Snex.pyeval(env, returning: "v")
+        assert {:ok, 123} = Snex.pyeval(env, "return v")
       end
 
       test "run pyeval on remote env#{suffix}",
@@ -62,7 +62,7 @@ defmodule Snex.ClusterTest do
             env
           end)
 
-        assert {:ok, 567} = Snex.pyeval(remote_env, returning: "v")
+        assert {:ok, 567} = Snex.pyeval(remote_env, "return v")
       end
 
       test "disable GC on remote env, send it to local and back, disable GC again#{suffix}",
@@ -82,13 +82,13 @@ defmodule Snex.ClusterTest do
         Agent.stop(env_agent)
         # at this point, env resource has definitely been cleaned up by the GC
 
-        assert {:ok, 1024} = Snex.pyeval(env, returning: "v")
+        assert {:ok, 1024} = Snex.pyeval(env, "return v")
 
         assert {:ok, 1024} =
                  :erpc.call(remote_node, fn ->
                    # check that we can disable GC again
                    env = Snex.Env.disable_gc(env)
-                   Snex.pyeval(env, returning: "v")
+                   Snex.pyeval(env, "return v")
                  end)
       end
 
@@ -97,7 +97,7 @@ defmodule Snex.ClusterTest do
         {:ok, env} = Snex.make_env(remote_interpreter, %{"v" => 4096})
         env = Snex.Env.disable_gc(env)
 
-        assert {:ok, 4096} = Snex.pyeval(env, returning: "v")
+        assert {:ok, 4096} = Snex.pyeval(env, "return v")
 
         _ = Snex.Env.disable_gc(env)
       end
@@ -111,13 +111,13 @@ defmodule Snex.ClusterTest do
             env
           end)
 
-        assert {:ok, 789} = Snex.pyeval(remote_env, returning: "v")
+        assert {:ok, 789} = Snex.pyeval(remote_env, "return v")
 
         # Destroy from local node
         assert :ok = Snex.destroy_env(remote_env)
 
         assert {:error, %Snex.Error{code: :env_not_found}} =
-                 Snex.pyeval(remote_env, returning: "v")
+                 Snex.pyeval(remote_env, "return v")
       end
 
       test "destroy_env is idempotent across nodes#{suffix}",
@@ -129,7 +129,7 @@ defmodule Snex.ClusterTest do
         assert :ok = :erpc.call(remote_node, Snex, :destroy_env, [env])
         assert :ok = Snex.destroy_env(env)
 
-        assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "v")
+        assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, "return v")
       end
     end
 
@@ -148,9 +148,9 @@ defmodule Snex.ClusterTest do
                  )
 
                  result['counter'] = result['counter'] + 1
+                 return result
                  """,
-                 %{"agent" => TestAgent, "identity" => & &1, "this_node" => node()},
-                 returning: "result"
+                 %{"agent" => TestAgent, "identity" => & &1, "this_node" => node()}
                )
     end
 

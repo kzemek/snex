@@ -84,11 +84,11 @@ defmodule Snex.GCTest do
 
   describe "Snex.destroy_env/1" do
     test "destroys the environment and subsequent pyeval calls return env_not_found", %{env: env} do
-      assert {:ok, 1} = Snex.pyeval(env, returning: "1")
+      assert {:ok, 1} = Snex.pyeval(env, "return 1")
 
       assert :ok = Snex.destroy_env(env)
 
-      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, "return 1")
     end
 
     test "is idempotent - can be called multiple times on the same environment", %{env: env} do
@@ -96,14 +96,14 @@ defmodule Snex.GCTest do
       assert :ok = Snex.destroy_env(env)
       assert :ok = Snex.destroy_env(env)
 
-      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, "return 1")
     end
 
     @tag garbage_collector_mitm?: true
     test "prevents automatic GC from sending duplicate destroy commands", %{env: env} do
       # Manually destroy the env - this should disable automatic GC for local envs
       assert :ok = Snex.destroy_env(env)
-      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, returning: "1")
+      assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, "return 1")
 
       # Drop the ref by setting it to nil and trigger GC
       %{id: env_id} = _env = %{env | ref: nil}
@@ -115,7 +115,7 @@ defmodule Snex.GCTest do
   end
 
   defp wait_until_error_code(env, code, retries \\ 1000) do
-    case Snex.pyeval(env, returning: "1") do
+    case Snex.pyeval(env, "return 1") do
       {:error, %Snex.Error{code: ^code}} = err ->
         err
 
