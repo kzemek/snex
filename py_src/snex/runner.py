@@ -181,11 +181,10 @@ async def run_loop() -> None:
         except asyncio.IncompleteReadError:
             break
 
-        if len(all_data) < ID_LEN_BYTES:
+        if len(all_data) < ID_LEN_BYTES + 1:
             print(  # noqa: T201
-                "Invalid data: not enough bytes for an ID",
+                "Invalid data: not enough bytes for a message type and ID",
                 file=sys.stderr,
-                end="\r\n",
             )
             continue
 

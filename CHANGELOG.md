@@ -41,6 +41,10 @@
 
   Up to 70% speedup of `snex.cast`, taking better advantage of the fact that we don't care about the result.
 
+- **Set Python's stdout/stderr to output `\r\n` newlines**
+
+  stdout/stderr is handled through Erlang, and line offsets get mangled without carriage return.
+
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**
