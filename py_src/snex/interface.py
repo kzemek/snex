@@ -44,7 +44,7 @@ def _write_request(req_id: bytes, command: models.OutRequest) -> None:
 
 def send(to: object, data: object) -> None:
     """
-    Send data to a BEAM process.
+    Send data to a BEAM process. Thread-safe.
 
     Args:
         to: The BEAM process to send the data to; can be any identifier that can be used
@@ -63,7 +63,7 @@ def cast(
     node: str | Atom | Term | None = None,
 ) -> None:
     """
-    Call a function in BEAM without waiting for a response.
+    Call a function in BEAM without waiting for a response. Thread-safe.
 
     `module`, `function` and `node` can be given as strings, atoms, or `snex.Term` that
     resolves either to a string, or an atom. They will be converted to atoms on the BEAM
@@ -98,7 +98,7 @@ async def call(
     node: str | Atom | Term | None = None,
 ) -> Any:  # noqa: ANN401
     """
-    Call a function in BEAM, returning the result.
+    Call a function in BEAM, returning the result. Thread-safe.
 
     `module`, `function` and `node` can be given as strings, atoms, or `snex.Term` that
     resolves either to a string, or an atom. They will be converted to atoms on the BEAM

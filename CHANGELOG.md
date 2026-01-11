@@ -39,6 +39,8 @@
 
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
+- **Document thread-safety of `snex.{send,cast,call}` functions**
+
 - **Rename `%Snex.Code{}`'s `:code` to `:src`**
 
 - **Lots of smaller refactors for code clarity and improved performance**
