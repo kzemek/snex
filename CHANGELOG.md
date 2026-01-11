@@ -20,6 +20,11 @@
   Simplifies setup for one-off commands.
   `pyeval` without a `Snex.Env` is less performant due to additional interprocess communication, but cutting a `make_env` Python call makes up for it when running just a few commands.
 
+- **Add a way to configure port's `:parallelism, :busy_limits_port, :busy_limits_msgq`**
+
+  These can be configured with `:port_opts` opt in `Snex.Interpreter.start_link/1`.
+  If not configured, `:busy_limits_port` is set to `{4MB, 8MB}`, up from Erlang's default of `{4kB, 8kB}`.
+
 ### Changes
 
 - **Set line location with `ast` manipulation & cache code compilation**
