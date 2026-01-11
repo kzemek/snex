@@ -45,8 +45,6 @@
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**
 
-- **Rename `%Snex.Code{}`'s `:code` to `:src`**
-
 - **Lots of smaller refactors for code clarity and improved performance**
 
 ## 0.3.2

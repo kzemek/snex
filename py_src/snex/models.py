@@ -55,7 +55,7 @@ class InitCommand(TypedDict):
 
 
 class MakeEnvCommandFromEnv(TypedDict):
-    env: EnvID
+    env_id: EnvID
     keys_mode: Literal["only", "except"]
     keys: list[str]
 
@@ -69,13 +69,13 @@ class MakeEnvCommand(TypedDict):
 class EvalCommand(TypedDict):
     type: Literal["eval"]
     code: Code | None
-    env: EnvID | None
+    env_id: EnvID | None
     additional_vars: dict[str, object]
 
 
 class GCCommand(TypedDict):
     type: Literal["gc"]
-    env: EnvID
+    env_id: EnvID
 
 
 class OkResponse(TypedDict):

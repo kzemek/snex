@@ -49,7 +49,7 @@ def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
     env = envs[ROOT_ENV_ID].copy()
 
     for from_env_cmd in cmd["from_env"]:
-        env_id = from_env_cmd["env"]
+        env_id = from_env_cmd["env_id"]
         try:
             from_env = envs[env_id]
         except KeyError:
@@ -77,10 +77,10 @@ def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
 
 
 async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
-    if cmd["env"] is None:
+    if cmd["env_id"] is None:
         env = envs[ROOT_ENV_ID].copy()
     else:
-        env_id = cmd["env"]
+        env_id = cmd["env_id"]
         try:
             env = envs[env_id]
         except KeyError:
@@ -99,7 +99,7 @@ async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
 
 
 def run_gc(cmd: GCCommand, envs: Envs) -> None:
-    envs.pop(cmd["env"], None)
+    envs.pop(cmd["env_id"], None)
 
 
 async def run(
