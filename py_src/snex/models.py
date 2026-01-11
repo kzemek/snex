@@ -121,8 +121,10 @@ class ErrorResponse(TypedDict):
     traceback: NotRequired[list[str] | None]
 
 
-InRequest = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
+InRequest = InitCommand | MakeEnvCommand | EvalCommand
+InRequestNoreply = GCCommand
 InResponse = CallResponse | CallErrorResponse
+InNoReply = InRequestNoreply | InResponse
 OutRequest = CallCommand | CastCommand
 OutResponse = OkResponse | ErrorResponse
 
