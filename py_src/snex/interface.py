@@ -32,14 +32,9 @@ def _write_request(req_id: bytes, command: models.OutRequest) -> None:
         raise RuntimeError(msg)
 
     if threading.get_ident() == _main_thread_id:
-        transport.write_request(_writer, req_id, command)
+        transport.write_data(_writer, req_id, command)
     else:
-        _main_loop.call_soon_threadsafe(
-            transport.write_request,
-            _writer,
-            req_id,
-            command,
-        )
+        _main_loop.call_soon_threadsafe(transport.write_data, _writer, req_id, command)
 
 
 def send(to: object, data: object) -> None:

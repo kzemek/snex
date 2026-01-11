@@ -1,25 +1,18 @@
 import asyncio
-from enum import IntEnum
-from typing import Literal
+
+from snex import models
 
 from . import etf
 from .models import OutRequest, OutResponse
 
 
-class MessageType(IntEnum):
-    REQUEST = 0
-    RESPONSE = 1
-
-
-def _write_data(
+def write_data(
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    data: (
-        tuple[Literal[MessageType.REQUEST], OutRequest]
-        | tuple[Literal[MessageType.RESPONSE], OutResponse]
-    ),
+    data: OutRequest | OutResponse,
 ) -> None:
-    data_list = etf.encode(data[1])
+    message_type = models.out_message_type(data)
+    data_list = etf.encode(data)
     data_len = sum(len(d) for d in data_list)
     bytes_cnt = len(req_id) + 1 + data_len
 
@@ -27,26 +20,10 @@ def _write_data(
         [
             int.to_bytes(bytes_cnt, length=4, byteorder="big"),
             req_id,
-            int.to_bytes(data[0], length=1, byteorder="big"),
+            int.to_bytes(message_type, length=1, byteorder="big"),
         ],
     )
     writer.writelines(data_list)
-
-
-def write_request(
-    writer: asyncio.WriteTransport,
-    req_id: bytes,
-    request: OutRequest,
-) -> None:
-    _write_data(writer, req_id, (MessageType.REQUEST, request))
-
-
-def write_response(
-    writer: asyncio.WriteTransport,
-    req_id: bytes,
-    response: OutResponse,
-) -> None:
-    _write_data(writer, req_id, (MessageType.RESPONSE, response))
 
 
 async def setup_io(

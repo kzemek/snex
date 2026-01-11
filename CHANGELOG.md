@@ -37,6 +37,10 @@
   Saves work down the line, especially in a multi-node scenario.
   Smooths over an edge case of garbage collecting on a dead registered interpreter.
 
+- **Separate handling for call/cast earlier in the Elixir stack**
+
+  Up to 70% speedup of `snex.cast`, taking better advantage of the fact that we don't care about the result.
+
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**

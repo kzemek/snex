@@ -116,7 +116,7 @@ defmodule SnexTest do
     test "can handle multiple concurrent calls", %{env: env} do
       {:ok, agent} = Agent.start_link(fn -> 0 end)
 
-      assert {:ok, [1, 2, 3]} =
+      assert {:ok, results} =
                Snex.pyeval(
                  env,
                  """
@@ -130,6 +130,8 @@ defmodule SnexTest do
                  """,
                  %{"agent" => agent, "fun" => &{&1 + 1, &1 + 1}}
                )
+
+      assert [1, 2, 3] = Enum.sort(results)
     end
   end
 

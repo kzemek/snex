@@ -19,6 +19,7 @@ from .models import (
     InRequest,
     InResponse,
     MakeEnvCommand,
+    MessageType,
     OkResponse,
     OutResponse,
     generate_id,
@@ -41,7 +42,7 @@ async def run_init(cmd: InitCommand, envs: Envs) -> OkResponse:
     if cmd["code"]:
         await code.run_exec(cmd["code"], root_env)
 
-    return OkResponse(status="ok", value=None)
+    return OkResponse(type="ok", value=None)
 
 
 def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
@@ -53,7 +54,7 @@ def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
             from_env = envs[env_id]
         except KeyError:
             return ErrorResponse(
-                status="error",
+                type="error",
                 code="env_not_found",
                 reason=f"Environment {env_id_to_str(env_id)} not found",
             )
@@ -72,7 +73,7 @@ def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
     env_id = EnvID(generate_id())
     envs[env_id] = env
 
-    return OkResponse(status="ok", value=env_id)
+    return OkResponse(type="ok", value=env_id)
 
 
 async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
@@ -84,7 +85,7 @@ async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
             env = envs[env_id]
         except KeyError:
             return ErrorResponse(
-                status="error",
+                type="error",
                 code="env_not_found",
                 reason=f"Environment {env_id_to_str(env_id)} not found",
             )
@@ -94,7 +95,7 @@ async def run_eval(cmd: EvalCommand, envs: Envs) -> OkResponse | ErrorResponse:
     if cmd["code"]:
         value = await code.run_exec(cmd["code"], env)
 
-    return OkResponse(status="ok", value=value)
+    return OkResponse(type="ok", value=value)
 
 
 def run_gc(cmd: GCCommand, envs: Envs) -> None:
@@ -125,7 +126,7 @@ async def run(
 
     else:
         result = ErrorResponse(
-            status="error",
+            type="error",
             code="internal_error",
             reason=f"Unknown command: {command}",
         )
@@ -147,19 +148,19 @@ def on_task_done(
 
         if result is not None:
             try:
-                transport.write_response(writer, req_id, result)
+                transport.write_data(writer, req_id, result)
             except Exception as e:  # noqa: BLE001
                 exc = e
 
         if exc is not None:
             error_result = ErrorResponse(
-                status="error",
+                type="error",
                 code="python_runtime_error",
                 reason=str(exc),
                 traceback=traceback.format_exception(exc),
             )
 
-            transport.write_response(writer, req_id, error_result)
+            transport.write_data(writer, req_id, error_result)
 
     except asyncio.CancelledError:
         pass
@@ -190,13 +191,7 @@ async def run_loop() -> None:
 
         try:
             req_id = bytes(all_data[:16])
-
-            if all_data[16] not in [
-                transport.MessageType.REQUEST,
-                transport.MessageType.RESPONSE,
-            ]:
-                msg = f"Invalid message type: {all_data[16]}"
-                raise ValueError(msg)  # noqa: TRY301
+            _message_type = MessageType(all_data[16])
 
             command: InRequest = pickle.loads(all_data[17:])  # noqa: S301
 
@@ -209,9 +204,9 @@ async def run_loop() -> None:
             break
         except Exception as e:  # noqa: BLE001
             result = ErrorResponse(
-                status="error",
+                type="error",
                 code="python_runtime_error",
                 reason=str(e),
                 traceback=traceback.format_exception(e),
             )
-            transport.write_response(writer, req_id, result)
+            transport.write_data(writer, req_id, result)
