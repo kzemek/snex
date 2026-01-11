@@ -6,6 +6,7 @@ import functools
 import pickle
 import sys
 import traceback
+from typing import Final
 
 import snex
 
@@ -16,8 +17,8 @@ from .models import (
     EvalCommand,
     GCCommand,
     InitCommand,
+    InNoReply,
     InRequest,
-    InResponse,
     MakeEnvCommand,
     MessageType,
     OkResponse,
@@ -27,8 +28,8 @@ from .models import (
 
 Envs = dict[EnvID, dict[str, object]]
 
-ID_LEN_BYTES = 16
-ROOT_ENV_ID = EnvID(b"root")
+ID_LEN_BYTES: Final[int] = 16
+ROOT_ENV_ID: Final[EnvID] = EnvID(b"root")
 
 
 def env_id_to_str(env_id: EnvID) -> str:
@@ -102,11 +103,7 @@ def run_gc(cmd: GCCommand, envs: Envs) -> None:
     envs.pop(cmd["env_id"], None)
 
 
-async def run(
-    req_id: bytes,
-    command: InRequest | InResponse,
-    envs: Envs,
-) -> OutResponse | None:
+async def run(command: InRequest, envs: Envs) -> OutResponse:
     result: OutResponse | None = None
 
     if command["type"] == "init":
@@ -118,12 +115,6 @@ async def run(
     elif command["type"] == "eval":
         result = await run_eval(command, envs)
 
-    elif command["type"] == "gc":
-        run_gc(command, envs)
-
-    elif command["type"] == "call_response" or command["type"] == "call_error_response":
-        interface.on_call_response(req_id, command)
-
     else:
         result = ErrorResponse(
             type="error",
@@ -134,10 +125,22 @@ async def run(
     return result
 
 
-def on_task_done(
+async def run_noreply(command: InNoReply, req_id: bytes, envs: Envs) -> None:
+    if command["type"] == "gc":
+        run_gc(command, envs)
+
+    elif command["type"] == "call_response" or command["type"] == "call_error_response":
+        interface.on_call_response(req_id, command)
+
+    else:
+        msg = f"Unknown no-reply command: {command}"
+        raise ValueError(msg)
+
+
+def on_task_done_reply(
+    running_tasks: set[asyncio.Task[OutResponse | None]],
     writer: asyncio.WriteTransport,
     req_id: bytes,
-    running_tasks: set[asyncio.Task[OutResponse | None]],
     task: asyncio.Task[OutResponse | None],
 ) -> None:
     running_tasks.discard(task)
@@ -166,6 +169,21 @@ def on_task_done(
         pass
 
 
+def on_task_done_noreply(
+    running_tasks: set[asyncio.Task[OutResponse | None]],
+    task: asyncio.Task[None],
+) -> None:
+    running_tasks.discard(task)
+
+    try:
+        exc = task.exception()
+        if exc is not None:
+            traceback.print_exception(exc, file=sys.stderr)
+
+    except asyncio.CancelledError:
+        pass
+
+
 async def run_loop() -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
@@ -188,24 +206,44 @@ async def run_loop() -> None:
             )
             continue
 
+        req_id = bytes(all_data[:ID_LEN_BYTES])
+        message_type = all_data[ID_LEN_BYTES]
+
         try:
-            req_id = bytes(all_data[:16])
-            _message_type = MessageType(all_data[16])
+            # Validate message type
+            message_type = MessageType(message_type)
+            command = pickle.loads(all_data[ID_LEN_BYTES + 1 :])  # noqa: S301
 
-            command: InRequest = pickle.loads(all_data[17:])  # noqa: S301
-
-            task = loop.create_task(run(req_id, command, envs))
-            running_tasks.add(task)
-            task.add_done_callback(
-                functools.partial(on_task_done, writer, req_id, running_tasks),
-            )
+            if message_type == MessageType.REQUEST:
+                task = loop.create_task(run(command, envs))
+                running_tasks.add(task)
+                task.add_done_callback(
+                    functools.partial(
+                        on_task_done_reply,
+                        running_tasks,
+                        writer,
+                        req_id,
+                    ),
+                )
+            else:
+                noreply_task = loop.create_task(run_noreply(command, req_id, envs))
+                running_tasks.add(noreply_task)
+                noreply_task.add_done_callback(
+                    functools.partial(
+                        on_task_done_noreply,
+                        running_tasks,
+                    ),
+                )
         except asyncio.CancelledError:
             break
         except Exception as e:  # noqa: BLE001
-            result = ErrorResponse(
-                type="error",
-                code="python_runtime_error",
-                reason=str(e),
-                traceback=traceback.format_exception(e),
-            )
-            transport.write_data(writer, req_id, result)
+            if message_type == MessageType.REQUEST:
+                result = ErrorResponse(
+                    type="error",
+                    code="python_runtime_error",
+                    reason=str(e),
+                    traceback=traceback.format_exception(e),
+                )
+                transport.write_data(writer, req_id, result)
+            else:
+                traceback.print_exception(e, file=sys.stderr)

@@ -45,6 +45,8 @@
 
   stdout/stderr is handled through Erlang, and line offsets get mangled without carriage return.
 
+- **Improve logs in exceptional circumstances**
+
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**
