@@ -26,11 +26,13 @@ defmodule Snex.Interpreter do
   alias Snex.Internal
   alias Snex.Internal.Command
   alias Snex.Internal.Commands
+  alias Snex.Internal.TaskSupervisor
 
   require Logger
 
   @request 0
-  @response 1
+  @request_noreply 1
+  @response 2
   @default_init_script_timeout to_timeout(minute: 1)
   @default_busy_limits_port {4096 * 1024, 8192 * 1024}
 
@@ -293,20 +295,16 @@ defmodule Snex.Interpreter do
         {port, {:data, <<id::binary-size(16), @request, data::binary>>}},
         %State{port: port} = state
       ) do
-    task =
-      Task.Supervisor.async_nolink(Snex.Internal.TaskSupervisor, fn ->
-        case Snex.Serde.decode(data) do
-          {:ok, %{"type" => cmd, "module" => m, "function" => f, "args" => a, "node" => node}} ->
-            result = call_or_cast(cmd, to_atom(m), to_atom(f), a, to_atom(node))
-            (cmd == "call" && {:reply, result}) || :noreply
-
-          other ->
-            Logger.warning("Received unexpected request: #{inspect(other)}")
-            :noreply
-        end
-      end)
-
+    task = Task.Supervisor.async_nolink(TaskSupervisor, __MODULE__, :on_python_request, [data])
     {:noreply, %State{state | pending_tasks: Map.put(state.pending_tasks, task.ref, id)}}
+  end
+
+  def handle_info(
+        {port, {:data, <<_id::binary-size(16), @request_noreply, data::binary>>}},
+        %State{port: port} = state
+      ) do
+    {:ok, _} = Task.Supervisor.start_child(TaskSupervisor, __MODULE__, :on_python_request, [data])
+    {:noreply, state}
   end
 
   @spec handle_info({port(), {:exit_status, integer()}}, state()) ::
@@ -320,18 +318,12 @@ defmodule Snex.Interpreter do
     Process.demonitor(ref, [:flush])
     {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
 
-    case result do
-      :noreply ->
-        :ok
-
-      {:reply, result} ->
-        command = %Commands.CallResponse{result: result}
-        encoded_command = encode_command(command, id, state.encoding_opts)
-        # as long as we don't let users control the encoding opts per Snex.Env,
-        # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
-        # we'll need here the env.encoding_opts of the task that called `snex.call`.
-        port_command_async(self(), state.port, encoded_command)
-    end
+    command = %Commands.CallResponse{result: result}
+    encoded_command = encode_command(command, id, state.encoding_opts)
+    # as long as we don't let users control the encoding opts per Snex.Env,
+    # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
+    # we'll need here the env.encoding_opts of the task that called `snex.call`.
+    port_command_async(self(), state.port, encoded_command)
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
   end
@@ -454,10 +446,13 @@ defmodule Snex.Interpreter do
 
   def port_command_async(owner, port, data) when is_pid(owner) do
     with :nosuspend <- Process.send(port, {owner, {:command, data}}, [:nosuspend]) do
-      Task.Supervisor.start_child(Snex.Internal.TaskSupervisor, Kernel, :send, [
-        port,
-        {owner, {:command, data}}
-      ])
+      {:ok, _} =
+        Task.Supervisor.start_child(
+          TaskSupervisor,
+          Kernel,
+          :send,
+          [port, {owner, {:command, data}}]
+        )
     end
 
     :ok
@@ -484,10 +479,10 @@ defmodule Snex.Interpreter do
 
   defp reply_to_result(reply) do
     case reply do
-      %{"status" => "ok", "value" => value} ->
+      %{"type" => "ok", "value" => value} ->
         {:ok, value}
 
-      %{"status" => "error", "code" => code, "reason" => reason} = data ->
+      %{"type" => "error", "code" => code, "reason" => reason} = data ->
         error =
           Snex.Error.exception(
             # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
@@ -504,24 +499,30 @@ defmodule Snex.Interpreter do
     end
   end
 
+  @doc false
+  # called by handle_info with request/request_noreply port data
+  @spec on_python_request(binary()) :: :noreply | term()
+  def on_python_request(data) do
+    {:ok, %{"type" => type, "module" => m, "function" => f, "args" => a, "node" => node}} =
+      Snex.Serde.decode(data)
+
+    [m, f, node] =
+      Enum.map([m, f, node], fn
+        atom when is_atom(atom) -> atom
+        # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+        string when is_binary(string) -> String.to_atom(string)
+      end)
+
+    case type do
+      _ when node in [nil, node()] -> apply(m, f, a)
+      "call" -> :erpc.call(node, m, f, a)
+      "cast" -> :erpc.cast(node, m, f, a)
+    end
+  end
+
   defp generate_request_id,
     do: :rand.bytes(16)
 
   defp encode_command(command, id, encoding_opts),
     do: [id, @request, Command.encode(command, encoding_opts)]
-
-  defp call_or_cast(_command, m, f, a, node) when node in [nil, node()],
-    do: apply(m, f, a)
-
-  defp call_or_cast("cast", m, f, a, node),
-    do: Task.Supervisor.start_child({Snex.Internal.TaskSupervisor, node}, m, f, a)
-
-  defp call_or_cast("call", m, f, a, node) do
-    Task.Supervisor.async({Snex.Internal.TaskSupervisor, node}, m, f, a)
-    |> Task.await(:infinity)
-  end
-
-  # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
-  defp to_atom(value) when is_binary(value), do: String.to_atom(value)
-  defp to_atom(value) when is_atom(value), do: value
 end

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from enum import IntEnum
 from typing import TYPE_CHECKING, Literal, NewType, TypedDict
 
 if TYPE_CHECKING:
@@ -78,14 +79,8 @@ class GCCommand(TypedDict):
 
 
 class OkResponse(TypedDict):
-    status: Literal["ok"]
+    type: Literal["ok"]
     value: object
-
-
-class SendCommand(TypedDict):
-    type: Literal["send"]
-    to: Term
-    data: object
 
 
 class CallCommand(TypedDict):
@@ -115,7 +110,7 @@ class CallErrorResponse(TypedDict):
 
 
 class ErrorResponse(TypedDict):
-    status: Literal["error"]
+    type: Literal["error"]
     code: Literal[
         "internal_error",
         "python_runtime_error",
@@ -128,5 +123,23 @@ class ErrorResponse(TypedDict):
 
 InRequest = InitCommand | MakeEnvCommand | EvalCommand | GCCommand
 InResponse = CallResponse | CallErrorResponse
-OutRequest = SendCommand | CallCommand | CastCommand
+OutRequest = CallCommand | CastCommand
 OutResponse = OkResponse | ErrorResponse
+
+
+class MessageType(IntEnum):
+    REQUEST = 0
+    REQUEST_NOREPLY = 1
+    RESPONSE = 2
+
+
+def out_message_type(data: OutRequest | OutResponse) -> MessageType:
+    message_type: MessageType
+    if data["type"] == "call":
+        message_type = MessageType.REQUEST
+    elif data["type"] == "cast":
+        message_type = MessageType.REQUEST_NOREPLY
+    else:
+        message_type = MessageType.RESPONSE
+
+    return message_type
