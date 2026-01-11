@@ -32,6 +32,7 @@ defmodule Snex.Interpreter do
   @request 0
   @response 1
   @default_init_script_timeout to_timeout(minute: 1)
+  @default_busy_limits_port {4096 * 1024, 8192 * 1024}
 
   @typedoc """
   Running instance of `Snex.Interpreter`.
@@ -70,6 +71,16 @@ defmodule Snex.Interpreter do
           | {String.t() | Snex.Code.t(), %{optional(String.t()) => any()}}
 
   @typedoc """
+  See `:erlang.open_port/2` options for detailed documentation.
+
+  `:busy_limits_port` is set to `#{inspect(@default_busy_limits_port)}` if not specified.
+  """
+  @type port_opts ::
+          {:parallelism, boolean()}
+          | {:busy_limits_port, {non_neg_integer(), non_neg_integer()} | :disabled}
+          | {:busy_limits_msgq, {non_neg_integer(), non_neg_integer()} | :disabled}
+
+  @typedoc """
   Options for `start_link/1`.
   """
   @type option ::
@@ -82,6 +93,7 @@ defmodule Snex.Interpreter do
           | {:sync_start?, boolean()}
           | {:label, term()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
+          | {:port_opts, port_opts()}
           | GenServer.option()
 
   @doc false
@@ -193,6 +205,9 @@ defmodule Snex.Interpreter do
     - `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - Options for encoding Elixir terms
       to a desired representation on the Python side. These settings will be used when encoding
       terms for this interpreter, but can be overridden by individual commands.
+
+    - `:port_opts` (`t:port_opts/0`) - Advanced options for the port used to communicate with
+      the Python interpreter.
 
     - any other options will be passed to `GenServer.start_link/3`.
   """
@@ -371,6 +386,13 @@ defmodule Snex.Interpreter do
         fun when is_function(fun, 2) -> fun.(python, default_args)
       end
 
+    additional_port_opts =
+      opts
+      |> Keyword.get(:port_opts, [])
+      |> Keyword.take([:parallelism, :busy_limits_port, :busy_limits_msgq])
+      |> Keyword.merge(Keyword.take(opts, [:cd]))
+      |> Keyword.put_new(:busy_limits_port, @default_busy_limits_port)
+
     port =
       Port.open(
         {:spawn_executable, exec},
@@ -378,10 +400,11 @@ defmodule Snex.Interpreter do
           :binary,
           :exit_status,
           :nouse_stdio,
+          :hide,
           packet: 4,
           env: environment,
           args: args
-        ] ++ Keyword.take(opts, [:cd])
+        ] ++ additional_port_opts
       )
 
     with :ok <- run_init_script(port, opts),
