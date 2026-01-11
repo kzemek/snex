@@ -159,6 +159,11 @@ defmodule Snex do
   def make_env(interpreter, additional_vars, opts) do
     check_additional_vars(additional_vars)
 
+    # resolve interpreter right now to avoid repeated work down the line
+    interpreter =
+      with {name, node} <- GenServer.whereis(interpreter),
+           do: :erpc.call(node, Process, :whereis, [name])
+
     from_env = opts |> Keyword.get(:from, []) |> normalize_make_env_from(interpreter)
     command = %Commands.MakeEnv{from_env: from_env, additional_vars: additional_vars}
 

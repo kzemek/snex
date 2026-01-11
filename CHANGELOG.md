@@ -27,6 +27,11 @@
   Both changes bring a sizeable reduction of `Snex.pyeval/4` execution overhead.
   1024 compiled code snippets are cached through `functools.lru`.
 
+- **Pre-resolve interpreter name to pid when creating `Snex.Env`**
+
+  Saves work down the line, especially in a multi-node scenario.
+  Smooths over an edge case of garbage collecting on a dead registered interpreter.
+
 - **Rename `%Snex.Code{}`'s `:code` to `:src`**
 
 - **Lots of smaller refactors for code clarity and improved performance**
