@@ -102,12 +102,17 @@ defmodule Snex.Interpreter do
   def command(interpreter, port, command, encoding_opts, timeout) do
     envs = Internal.Command.referenced_envs(command)
 
+    deadline =
+      if timeout == :infinity,
+        do: :infinity,
+        else: {:abs, System.monotonic_time(:millisecond) + timeout}
+
     id = generate_request_id()
     encoded_command = encode_command(command, id, encoding_opts)
     request_id = :gen_server.send_request(interpreter, {:expect_reply, id})
-    run_command(interpreter, port, encoded_command)
+    port_command_sync(port, encoded_command)
 
-    case :gen_server.receive_response(request_id, timeout) do
+    case :gen_server.receive_response(request_id, deadline) do
       {:reply, reply} ->
         Snex.Env.touch(envs)
         decode_reply(reply)
@@ -121,19 +126,12 @@ defmodule Snex.Interpreter do
   end
 
   @doc false
-  @spec command_noreply(
-          server(),
-          port(),
-          request_id() | nil,
-          command(),
-          Snex.Serde.encoding_opts()
-        ) :: :ok
-  def command_noreply(interpreter, port, id \\ nil, command, encoding_opts) do
-    envs = Internal.Command.referenced_envs(command)
-    id = id || generate_request_id()
+  # command_noreply does not ensure envs will live until after the command is sent!
+  @spec command_noreply(server(), port(), command(), Snex.Serde.encoding_opts()) :: :ok
+  def command_noreply(interpreter, port, command, encoding_opts) do
+    id = generate_request_id()
     encoded_command = encode_command(command, id, encoding_opts)
-    run_command(interpreter, port, encoded_command)
-    Snex.Env.touch(envs)
+    interpreter |> GenServer.whereis() |> port_command_async(port, encoded_command)
   end
 
   @doc false
@@ -327,16 +325,12 @@ defmodule Snex.Interpreter do
         :ok
 
       {:reply, result} ->
-        command_noreply(
-          self(),
-          state.port,
-          id,
-          %Commands.CallResponse{result: result},
-          # as long as we don't let users control the encoding opts per Snex.Env,
-          # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
-          # we'll need here the env.encoding_opts of the task that called `snex.call`.
-          state.encoding_opts
-        )
+        command = %Commands.CallResponse{result: result}
+        encoded_command = encode_command(command, id, state.encoding_opts)
+        # as long as we don't let users control the encoding opts per Snex.Env,
+        # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
+        # we'll need here the env.encoding_opts of the task that called `snex.call`.
+        port_command_async(self(), state.port, encoded_command)
     end
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
@@ -349,7 +343,8 @@ defmodule Snex.Interpreter do
 
     if id do
       command = %Commands.CallErrorResponse{reason: inspect(reason)}
-      command_noreply(self(), state.port, id, command, state.encoding_opts)
+      encoded_command = encode_command(command, id, state.encoding_opts)
+      port_command_async(self(), state.port, encoded_command)
     end
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
@@ -422,7 +417,7 @@ defmodule Snex.Interpreter do
 
     id = generate_request_id()
     encoded_command = encode_command(command, id, Keyword.get(opts, :encoding_opts, []))
-    run_command(self(), port, encoded_command)
+    port_command_sync(port, encoded_command)
 
     init_script_timeout = Keyword.get(opts, :init_script_timeout, @default_init_script_timeout)
 
@@ -439,21 +434,37 @@ defmodule Snex.Interpreter do
     end
   end
 
-  defp run_command(interpreter, port, data) do
-    case GenServer.whereis(interpreter) do
-      owner when is_pid(owner) and node(owner) == node() ->
-        send(port, {owner, {:command, data}})
+  defp port_command_sync(port, data) when node(port) == node(),
+    do: Port.command(port, data)
 
-      owner when is_pid(owner) ->
-        node = node(owner)
-        :erpc.cast(node, fn -> send(port, {owner, {:command, data}}) end)
+  defp port_command_sync(port, data),
+    do: port |> node() |> :erpc.call(Port, :command, [port, data])
 
-      {name, node} ->
-        :erpc.cast(node, fn -> send(port, {Process.whereis(name), {:command, data}}) end)
+  @doc false
+  # `def` not `defp` because it's called from :erpc.cast
+  @spec port_command_async(owner :: pid() | {atom(), node()} | nil, port(), iodata()) :: :ok
+  def port_command_async({owner, node}, port, data) when node != node(),
+    do: :erpc.cast(node, __MODULE__, :port_command_async, [{owner, node}, port, data])
+
+  def port_command_async(owner, port, data) when is_pid(owner) and node(owner) != node(),
+    do: owner |> node() |> :erpc.cast(__MODULE__, :port_command_async, [owner, port, data])
+
+  def port_command_async({owner, node}, port, data) when is_atom(owner) and node == node(),
+    do: owner |> Process.whereis() |> port_command_async(port, data)
+
+  def port_command_async(owner, port, data) when is_pid(owner) do
+    with :nosuspend <- Process.send(port, {owner, {:command, data}}, [:nosuspend]) do
+      Task.Supervisor.start_child(Snex.Internal.TaskSupervisor, Kernel, :send, [
+        port,
+        {owner, {:command, data}}
+      ])
     end
 
     :ok
   end
+
+  def port_command_async(nil, _port, _data),
+    do: :ok
 
   defp decode_reply(data) do
     case Snex.Serde.decode(data) do

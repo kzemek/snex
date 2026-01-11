@@ -32,6 +32,8 @@
   Both changes bring a sizeable reduction of `Snex.pyeval/4` execution overhead.
   1024 compiled code snippets are cached through `functools.lru`.
 
+- **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
+
 - **Rename `%Snex.Code{}`'s `:code` to `:src`**
 
 ## 0.3.0
