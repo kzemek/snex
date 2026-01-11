@@ -27,7 +27,7 @@ defmodule Snex.Env do
           id: id(),
           ref: :erlang.nif_resource() | nil,
           port: port(),
-          interpreter: Snex.Interpreter.server(),
+          interpreter: pid(),
           encoding_opts: Snex.Serde.encoding_opts()
         }
 
@@ -36,7 +36,7 @@ defmodule Snex.Env do
   defstruct [:id, :ref, :port, :interpreter, :encoding_opts]
 
   @doc false
-  @spec make(id :: binary(), port(), Snex.Interpreter.server(), Snex.Serde.encoding_opts()) :: t()
+  @spec make(id :: binary(), port(), interpreter :: pid(), Snex.Serde.encoding_opts()) :: t()
   def make(id, port, interpreter, encoding_opts) do
     env = %__MODULE__{
       id: id,
