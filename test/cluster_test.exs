@@ -131,6 +131,14 @@ defmodule Snex.ClusterTest do
 
         assert {:error, %Snex.Error{code: :env_not_found}} = Snex.pyeval(env, "return v")
       end
+
+      test "destroy_env after remote interpreter stops#{suffix}",
+           %{remote_interpreter: remote_interpreter} do
+        {:ok, env} = Snex.make_env(remote_interpreter)
+        :ok = Snex.Interpreter.stop(remote_interpreter)
+
+        assert :ok = Snex.destroy_env(env)
+      end
     end
 
     test "can call Elixir functions on remote node from Python",

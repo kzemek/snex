@@ -37,6 +37,8 @@
   Saves work down the line, especially in a multi-node scenario.
   Smooths over an edge case of garbage collecting on a dead registered interpreter.
 
+- **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
+
 - **Rename `%Snex.Code{}`'s `:code` to `:src`**
 
 - **Lots of smaller refactors for code clarity and improved performance**

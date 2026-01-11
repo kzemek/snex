@@ -274,6 +274,7 @@ defmodule Snex do
   ## Options
 
     * `:timeout` - the timeout for the evaluation. Can be a `timeout()` or `:infinity`.
+      The timeout may be exceeded if the port buffer is full.
       Default: 5 seconds.
 
     * `:encoding_opts` (`t:Snex.Serde.encoding_opts/0`) - a list of encoding options to be used
