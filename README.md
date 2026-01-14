@@ -146,7 +146,7 @@ In Python parlance, they are **global & local symbol table** your Python code is
 
 > [!IMPORTANT]
 >
-> **Environments are garbage collected**  
+> **Environments are garbage collected**
 > When a `%Snex.Env{}` value is cleaned up by the BEAM VM, the Python process is signalled to deallocate the environment associated with that value.
 
 Reusing a single environment, you can use variables defined in the previous `Snex.pyeval/4` calls:
@@ -533,7 +533,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 530, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 534, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.

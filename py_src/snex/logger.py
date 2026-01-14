@@ -1,8 +1,23 @@
+from __future__ import annotations
+
 import logging
-from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
 from . import interface
 from .models import Atom
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping
+    from typing import TypeVar
+
+    CallableT = TypeVar("CallableT", bound=Callable)
+
+try:
+    from typing import override
+except ImportError:
+
+    def override(func: CallableT, /) -> CallableT:
+        return func
 
 
 class LoggingHandler(logging.Handler):
@@ -64,6 +79,7 @@ class LoggingHandler(logging.Handler):
 
         super().__init__(level)
 
+    @override
     def emit(self, record: logging.LogRecord) -> None:
         attrs = record.__dict__
 

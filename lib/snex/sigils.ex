@@ -47,4 +47,15 @@ defmodule Snex.Sigils do
       sigil_p(unquote(src), unquote(opts))
     end
   end
+
+  @doc """
+  Handles the sigil `~PY` for location-annotated Python code.
+
+  This is a more readable alias for [sigil `~P`](`sigil_P/2`).
+  """
+  defmacro sigil_PY(src, opts) do
+    quote do
+      sigil_P(unquote(src), unquote(opts))
+    end
+  end
 end

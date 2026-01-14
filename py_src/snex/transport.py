@@ -1,9 +1,18 @@
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING, Protocol
 
 from snex import models
 
 from . import etf
-from .models import OutRequest, OutResponse
+
+if TYPE_CHECKING:
+    from .models import OutRequest, OutResponse
+
+    class FileLike(Protocol):
+        def fileno(self) -> int: ...
+        def close(self) -> None: ...
 
 
 def write_data(
@@ -11,27 +20,31 @@ def write_data(
     req_id: bytes,
     data: OutRequest | OutResponse,
 ) -> None:
-    message_type = models.out_message_type(data)
-    data_list = etf.encode(data)
-    data_len = sum(len(d) for d in data_list)
-    bytes_cnt = len(req_id) + 1 + data_len
+    data_parts = etf.encode(data)
 
-    writer.writelines(
-        [
-            int.to_bytes(bytes_cnt, length=4, byteorder="big"),
-            req_id,
-            int.to_bytes(message_type, length=1, byteorder="big"),
-        ],
+    message_type = models.out_message_type(data)
+    data_parts[0] = (
+        req_id + int.to_bytes(message_type, length=1, byteorder="big") + data_parts[0]
     )
-    writer.writelines(data_list)
+
+    data_len = sum(len(d) for d in data_parts)
+    data_parts[0] = (
+        int.to_bytes(
+            data_len,
+            length=4,
+            byteorder="big",
+        )
+        + data_parts[0]
+    )
+
+    writer.writelines(data_parts)
 
 
 async def setup_io(
-    loop: asyncio.AbstractEventLoop,
+    erl_in: FileLike,
+    erl_out: FileLike,
 ) -> tuple[asyncio.StreamReader, asyncio.WriteTransport]:
-    erl_in = open(3, "rb", 0)  # noqa: ASYNC230, SIM115
-    erl_out = open(4, "wb", 0)  # noqa: ASYNC230, SIM115
-
+    loop = asyncio.get_running_loop()
     writer, _ = await loop.connect_write_pipe(asyncio.Protocol, erl_out)
 
     reader = asyncio.StreamReader()

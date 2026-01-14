@@ -1,10 +1,26 @@
-import ast
-import asyncio
-import functools
-from types import CodeType
-from typing import TypeVar, cast
+from __future__ import annotations
 
-from .models import Code
+import ast
+import functools
+import inspect
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import CodeType
+    from typing import TypeVar
+
+    from .models import Code
+
+    ASTType = TypeVar("ASTType", bound=ast.AST)
+    CallableT = TypeVar("CallableT", bound=Callable)
+
+try:
+    from typing import override
+except ImportError:
+
+    def override(func: CallableT, /) -> CallableT:
+        return func
 
 
 class SnexReturn(BaseException):
@@ -15,22 +31,27 @@ class SnexReturn(BaseException):
 
 
 class ReturnToRaiseTransformer(ast.NodeTransformer):
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:  # noqa: N802
+    @override
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         return node
 
-    def visit_AsyncFunctionDef(  # noqa: N802
+    @override
+    def visit_AsyncFunctionDef(
         self,
         node: ast.AsyncFunctionDef,
     ) -> ast.AsyncFunctionDef:
         return node
 
-    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:  # noqa: N802
+    @override
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         return node
 
-    def visit_Lambda(self, node: ast.Lambda) -> ast.Lambda:  # noqa: N802
+    @override
+    def visit_Lambda(self, node: ast.Lambda) -> ast.Lambda:
         return node
 
-    def visit_Return(self, node: ast.Return) -> ast.Raise:  # noqa: N802
+    @override
+    def visit_Return(self, node: ast.Return) -> ast.Raise:
         value = node.value if node.value is not None else ast.Constant(None)
         return ast.fix_missing_locations(
             ast.copy_location(
@@ -47,10 +68,7 @@ class ReturnToRaiseTransformer(ast.NodeTransformer):
         )
 
 
-T = TypeVar("T", bound=ast.AST)
-
-
-def _adjust_lineno(src: str, node: T, line_offset: int) -> T:
+def _adjust_lineno(src: str, node: ASTType, line_offset: int) -> ASTType:
     line_offset = max(0, line_offset - 1)
     if src and src[-1] == "\n":
         # heuristic: if the code ends with a newline, then assume we're
@@ -91,7 +109,7 @@ async def run_exec(code: Code, env: dict[str, object]) -> object:
     compiled = _transform_and_compile_exec(code["src"], code["file"], code["line"])
     try:
         res = eval(compiled, env, env)  # noqa: S307
-        if asyncio.iscoroutine(res):
+        if inspect.iscoroutine(res):
             await res
     except SnexReturn as r:
         return r.value

@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import random
 from enum import IntEnum
-from typing import TYPE_CHECKING, Literal, NewType, TypedDict
+from typing import TYPE_CHECKING, NewType, TypedDict
 
 if TYPE_CHECKING:
-    from typing import NotRequired
-
+    from typing import Literal, NotRequired
 
 EnvID = NewType("EnvID", bytes)
 
 
-def generate_id() -> bytes:
-    return random.randbytes(16)  # noqa: S311
+def generate_id() -> EnvID:
+    return EnvID(random.randbytes(16))  # noqa: S311
 
 
 class Atom(str):
