@@ -15,6 +15,13 @@
 
 ### Features
 
+- **`snex.log()` and `snex.LoggingHandler`**
+
+  Snex Python interface now exposes a `snex.log()` function (implemented on top of `snex.cast()`), and a logger handler class for use with Python's `logging`.
+  The new function logs the message with Elixir's `Logger`.
+
+  Snex's Python code dogfoods the handler to replace its error logging `print`s.
+
 - **`Snex.pyeval/4` can be called with interpreter instead of `%Snex.Env{}`**
 
   Simplifies setup for one-off commands.
@@ -25,7 +32,7 @@
   These can be configured with `:port_opts` opt in `Snex.Interpreter.start_link/1`.
   If not configured, `:busy_limits_port` is set to `{4MB, 8MB}`, up from Erlang's default of `{4kB, 8kB}`.
 
-## Changes
+### Changes
 
 - **Set line location with `ast` manipulation & cache code compilation**
 
@@ -133,7 +140,7 @@
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
 
-## Fixes
+### Fixes
 
 - **Fix `Snex.Env` usage in multi-node scenario**
 

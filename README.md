@@ -70,6 +70,10 @@ end
 # See Releases section in the README on how to configure mix release
 ```
 
+## Python interface documentation
+
+See [Python Interface Docs on HexDocs](https://hexdocs.pm/Snex/Python_Interface_Docs.html)
+
 ## Core Concepts & Usage
 
 - [Custom Interpreter](#custom-interpreter)
@@ -493,7 +497,7 @@ In fact, `snex.send` is just a convenient interface on top of `snex.cast`!
 `snex.cast` and `snex.call` differ only in how they handle results.
 `snex.call` must be awaited on, and will return the result of whatever was called, while `snex.cast` is fire-and-forget.
 Both functions will run `apply(m, f, a)` in a new process (`m` and `f` will be converted to atoms if given as `str`).
-They also accept an optional `node` argument to apply the function on a remote node - as long as it's also running the `:snex` application.
+They also accept an optional `node` argument to apply the function on a remote node.
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
@@ -541,4 +545,33 @@ iex> IO.puts(~p"12\t#{34}")
 12  34
 iex> IO.puts(~P"12\t#{34}")
 12\t#{34}
+```
+
+#### Using Elixir's `Logger` from Python
+
+Snex public interface provides a `snex.LoggingHandler` class for logging to Elixir's `Logger` from Python.
+`snex.LoggingHandler` subclasses `logging.Handler`, and can be used with traditional Python's `logging` subsystem.
+
+Among other things, `snex.LoggingHandler` ensures that Elixir-side log has proper location information and timestamp.
+It also adds several extra metadata parameters, all prefixed with `python_`.
+
+Besides the standard `level` argument, `snex.LoggingHandler` also accepts `default_metadata` and `extra_metadata_keys` keyword arguments.
+`default_metadata` is merged into the metadata passed to Elixir's `Logger`.
+`extra_metadata_keys` specifies which keys from the Python `logging` functions' `extra` dictionary should be included.
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+logger.addHandler(
+  LoggingHandler(
+    default_metadata={"application": "my_app"},
+    extra_metadata_keys={"foo"}
+  ),
+)
+
+logger.info("hello from Python", extra={"foo": "bar"})
+
+# depending on your Elixir Logger's metadata settings, you may see a line similar to
+# [info] hello from Python application=my_app foo=bar python_module=mymodule
 ```

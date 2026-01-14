@@ -2,7 +2,7 @@ defmodule Snex do
   @external_resource "README.md"
   @moduledoc File.read!("README.md")
              |> String.replace(
-               ~r/.*?Quick example\n(.*?)## Installation & Requirements\n.*?(?=### Custom Interpreter)/s,
+               ~r/.*?Quick example\n(.*?)## Installation & Requirements\n.*?(?=## Python interface documentation)/s,
                "\\1"
              )
              |> String.replace(~r/^##/m, "#")

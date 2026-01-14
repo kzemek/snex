@@ -146,7 +146,7 @@ def _encode_bytes_like(data: bytes | bytearray | memoryview, parts: Parts) -> No
 
 
 def _encode_term(data: Term, parts: Parts) -> None:
-    mv = memoryview(data)
+    mv = memoryview(data.value)
     # Report the highest ETF version found in the data.
     # The rest of the encoder uses a very conservative subset of the protocol,
     # but terms are arbitrary data encoded with current `:erlang.term_to_binary/1`.
