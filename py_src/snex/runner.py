@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import functools
 import logging
 import pickle
 import traceback
@@ -111,89 +110,61 @@ def run_gc(cmd: GCCommand, envs: Envs) -> None:
     envs.pop(cmd["env_id"], None)
 
 
-async def run(command: InRequest, envs: Envs) -> OutResponse:
-    result: OutResponse | None = None
+async def run(
+    writer: asyncio.WriteTransport,
+    req_id: bytes,
+    command: InRequest,
+    envs: Envs,
+) -> None:
+    try:
+        result: OutResponse
 
-    if command["type"] == "init":
-        result = await run_init(command, envs)
+        if command["type"] == "init":
+            result = await run_init(command, envs)
 
-    elif command["type"] == "make_env":
-        result = run_make_env(command, envs)
+        elif command["type"] == "make_env":
+            result = run_make_env(command, envs)
 
-    elif command["type"] == "eval":
-        result = await run_eval(command, envs)
+        elif command["type"] == "eval":
+            result = await run_eval(command, envs)
 
-    else:
-        result = ErrorResponse(
+        else:
+            result = ErrorResponse(
+                type="error",
+                code="internal_error",
+                reason=f"Unknown command: {command}",
+            )
+
+        transport.write_data(writer, req_id, result)
+    except Exception as e:  # noqa: BLE001
+        error_result = ErrorResponse(
             type="error",
-            code="internal_error",
-            reason=f"Unknown command: {command}",
+            code="python_runtime_error",
+            reason=str(e),
+            traceback=traceback.format_exception(e),
         )
 
-    return result
+        try:
+            transport.write_data(writer, req_id, error_result)
+        except Exception:
+            logger.exception("Snex: Error sending error response")
 
 
 async def run_noreply(command: InNoReply, req_id: bytes, envs: Envs) -> None:
-    if command["type"] == "gc":
-        run_gc(command, envs)
-
-    elif command["type"] == "call_response" or command["type"] == "call_error_response":
-        interface.on_call_response(req_id, command)
-
-    else:
-        msg = f"Unknown no-reply command: {command}"
-        raise ValueError(msg)
-
-
-def on_task_done_reply(
-    running_tasks: set[asyncio.Task[OutResponse | None]],
-    writer: asyncio.WriteTransport,
-    req_id: bytes,
-    task: asyncio.Task[OutResponse | None],
-) -> None:
-    running_tasks.discard(task)
-
     try:
-        exc = task.exception()
-        result = task.result() if exc is None else None
+        if command["type"] == "gc":
+            run_gc(command, envs)
 
-        if result is not None:
-            try:
-                transport.write_data(writer, req_id, result)
-            except Exception as e:  # noqa: BLE001
-                exc = e
+        elif (
+            command["type"] == "call_response"
+            or command["type"] == "call_error_response"
+        ):
+            interface.on_call_response(req_id, command)
 
-        if exc is not None:
-            error_result = ErrorResponse(
-                type="error",
-                code="python_runtime_error",
-                reason=str(exc),
-                traceback=traceback.format_exception(exc),
-            )
-
-            transport.write_data(writer, req_id, error_result)
-
-    except asyncio.CancelledError:
-        pass
+        else:
+            logger.error("Snex: Unknown no-reply command: %s", command)
     except Exception:
-        logger.exception("Snex: Error sending response")
-
-
-def on_task_done_noreply(
-    running_tasks: set[asyncio.Task[OutResponse | None]],
-    task: asyncio.Task[None],
-) -> None:
-    running_tasks.discard(task)
-
-    try:
-        if exc := task.exception():
-            logger.error(
-                "Snex: Error processing a no-reply request ",
-                exc_info=(type(exc), exc, exc.__traceback__),
-            )
-
-    except asyncio.CancelledError:
-        pass
+        logger.exception("Snex: Error processing a no-reply request")
 
 
 async def run_loop(
@@ -225,25 +196,13 @@ async def run_loop(
             command = pickle.loads(all_data[ID_LEN_BYTES + 1 :])  # noqa: S301
 
             if message_type == MessageType.REQUEST:
-                task = loop.create_task(run(command, envs))
-                running_tasks.add(task)
-                task.add_done_callback(
-                    functools.partial(
-                        on_task_done_reply,
-                        running_tasks,
-                        writer,
-                        req_id,
-                    ),
-                )
+                coro = run(writer, req_id, command, envs)
             else:
-                noreply_task = loop.create_task(run_noreply(command, req_id, envs))
-                running_tasks.add(noreply_task)
-                noreply_task.add_done_callback(
-                    functools.partial(
-                        on_task_done_noreply,
-                        running_tasks,
-                    ),
-                )
+                coro = run_noreply(command, req_id, envs)
+
+            task = loop.create_task(coro)
+            running_tasks.add(task)
+            task.add_done_callback(running_tasks.discard)
         except Exception as e:
             if message_type == MessageType.REQUEST:
                 result = ErrorResponse(
