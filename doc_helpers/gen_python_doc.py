@@ -197,6 +197,7 @@ class ModuleDocs:
         doc = inspect.cleandoc(obj.__doc__)
         lines = doc.splitlines()
         self._transform_section("Attributes", lines)
+        self._transform_examples_section(lines)
         doc = "\n".join(lines)
 
         function_members: list[FunctionType] = []
@@ -222,14 +223,13 @@ class ModuleDocs:
 
     def collect(self) -> "ModuleDocs":
         for exported_name in getattr(self.module, "__all__", []):
-            obj = getattr(self.module, exported_name, None)
-            if obj is None:
-                continue
+            obj = getattr(self.module, exported_name)
 
-            full_name = f"{self.module.__name__}.{obj.__qualname__}"
             if inspect.isfunction(obj):
+                full_name = f"{self.module.__name__}.{obj.__qualname__}"
                 self._collect_function(obj, "Python Functions", full_name)
             elif inspect.isclass(obj):
+                full_name = f"{self.module.__name__}.{obj.__qualname__}"
                 self._collect_class(obj, "Python Types", full_name)
 
         return self

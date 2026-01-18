@@ -173,7 +173,13 @@ async def run_loop(
 ) -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
-    envs: Envs = {ROOT_ENV_ID: {"snex": snex, "_SnexReturn": code.SnexReturn}}
+    envs: Envs = {
+        ROOT_ENV_ID: {
+            "snex": snex,
+            "Elixir": snex.Elixir,
+            "_SnexReturn": code.SnexReturn,
+        },
+    }
 
     while True:
         try:

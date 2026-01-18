@@ -40,13 +40,13 @@ end
 ```elixir
 {:ok, interpreter} = SnexTest.NumpyInterpreter.start_link(init_script: "import numpy as np")
 
-{:ok, 4.242640687119285} =
+{:ok, 6.0} =
   Snex.pyeval(interpreter, """
-    width = await snex.call("Elixir.Kernel", "div", [height, 2])
+    width, height = await Elixir.Enum.map([3, 3], mapper)
     matrix = np.fromfunction(lambda i, j: (-1) ** (i + j), (width, height), dtype=int)
 
     return np.linalg.norm(matrix)
-    """, %{"height" => 6})
+    """, %{"mapper" => &(&1 * 2)})
 ```
 
 ## Installation & Requirements
@@ -515,6 +515,25 @@ See [Python Interface Documentation / snex.EncodingOpts](https://hexdocs.pm/snex
   )
 ```
 
+##### `snex.Elixir`
+
+Snex includes syntax sugar for `snex.call` and `snex.cast` in the form of the `Elixir` object.
+`Elixir` allows calling Elixir functions using an Elixir-like syntax:
+
+```elixir
+{:ok, inp} = Snex.Interpreter.start_link()
+
+{:ok, %{"a" => 3, "b" => 2, "d" => 1}} =
+  Snex.pyeval(
+    inp,
+    "return await Elixir.Enum.frequencies(['a', 'b', 'a', 'a', 'd', 'b'])"
+  )
+```
+
+See [Python Interface Documentation / snex.BeamModuleProxy](https://hexdocs.pm/snex/Python_Interface_Documentation.html#t:snex.BeamModuleProxy/0) for more details.
+
+`snex.Elixir` is auto-imported into every Snex environment as `Elixir`
+
 #### Accurate code locations in Python traces
 
 When you use `Snex.pyeval/4` with code given as `String.t()`, as in all examples above, Snex doesn't know where the code literal actually lives.
@@ -537,7 +556,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 538, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 557, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.

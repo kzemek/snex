@@ -27,6 +27,14 @@
   `snex` Python module is now documented using `ExDoc`!
   Available through `mix docs`, or [on HexDocs](https://hexdocs.pm/Python_Interface_Documentation.ex) once the release is published.
 
+- **`snex.Elixir` proxy**
+
+  Add a syntax sugar for `snex.cast`/`snex.call` for a natural Elixir-like call syntax:
+
+  ```python
+  await Elixir.Enum.frequencies(["a", "b", "a", "a", "d", "b"])
+  ```
+
 - **`snex.LoggingHandler`**
 
   Snex Python interface now a `snex.LoggingHandler` class for use with Python's `logging`.

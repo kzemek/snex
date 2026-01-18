@@ -113,6 +113,40 @@ defmodule SnexTest do
       assert reason =~ ":erlang.div(10, 0)"
     end
 
+    test "can call Elixir functions from Python using the Elixir proxy", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(
+                 env,
+                 """
+                 result = await Elixir.Enum.frequencies(['a', 'b', 'a', 'a', 'd', 'b'])
+                 return result == {"a": 3, "b": 2, "d": 1}
+                 """
+               )
+    end
+
+    test "can pass result_encoding_opts to the Elixir proxy", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(
+                 env,
+                 """
+                 encoding_opts = snex.EncodingOpts(binary_as=snex.EncodingOpt.BinaryAs.BYTES)
+                 result = await Elixir.String.reverse("hello", result_encoding_opts=encoding_opts)
+                 return result == b"olleh"
+                 """
+               )
+    end
+
+    test "can cast Elixir functions from Python using the Elixir proxy", %{env: env} do
+      assert {:ok, nil} =
+               Snex.pyeval(
+                 env,
+                 "return await Elixir.Kernel.send(self, 'hey!', cast=True)",
+                 %{"self" => self()}
+               )
+
+      assert_receive "hey!"
+    end
+
     test "can handle multiple concurrent calls", %{env: env} do
       {:ok, agent} = Agent.start_link(fn -> 0 end)
 

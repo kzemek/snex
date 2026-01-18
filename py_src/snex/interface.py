@@ -4,7 +4,7 @@ import asyncio
 import threading
 from asyncio import AbstractEventLoop
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 from . import models, transport
 from .models import Atom, EncodingOpts, Term
@@ -12,7 +12,7 @@ from .models import Atom, EncodingOpts, Term
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
     from collections.abc import Callable, Coroutine, Iterable
-    from typing import Any, ParamSpec, TypeVar, TypeVarTuple, Unpack
+    from typing import Any, Literal, ParamSpec, TypeVar, TypeVarTuple, Unpack
 
     from .models import Term
 
@@ -203,3 +203,119 @@ async def _run_on_loop(
 
     future = asyncio.run_coroutine_threadsafe(coro, loop)
     return await asyncio.wrap_future(future)
+
+
+class BeamModuleProxy:
+    """
+    A proxy class for calling BEAM functions from Python.
+
+    `BeamModuleProxy` provides a syntax sugar for `snex.call` and `snex.cast`.
+    Its instances can be used to "address" BEAM functions using an Elixir-like syntax.
+
+    An instance of this class representing the `Elixir` module prefix is available
+    exported as `snex.Elixir`, and is auto-imported as `Elixir` into Snex environments.
+    See the examples below for usage.
+
+    Examples::
+
+        >>> from snex import Elixir
+        >>> await Elixir.Enum.frequencies(["a", "b", "a", "a", "d", "b"])
+        {"a": 3, "b": 2, "d": 1}
+
+        # Similar to `snex.call`, you can pass `node` or `result_encoding_opts`
+        >>> encoding_opts = snex.EncodingOpts(binary_as=snex.EncodingOpt.BinaryAs.BYTES)
+        >>> await Elixir.String.reverse("hello", result_encoding_opts=encoding_opts)
+        b"olleh"
+
+        # `snex.cast` can be invoked by passing `cast=True`
+        >>> await Elixir.Kernel.send("registered_name", "hello!", cast=True)
+        None
+
+        # Make a custom proxy object for a non-Elixir module
+        >>> erlang = BeamModuleProxy("erlang")
+        >>> await erlang.float_to_binary(3.14)
+        "3.14000000000000012434e+00"
+
+    """
+
+    __slots__ = ("_function_name", "_module_name")
+    _cast_fn = staticmethod(cast)
+
+    _function_name: Atom | None
+    _module_name: Atom
+
+    def __init__(
+        self,
+        module_name: str,
+        function_name: str | None = None,
+    ) -> None:
+        self._module_name = Atom(module_name)
+        self._function_name = Atom(function_name) if function_name is not None else None
+
+    def __getattr__(
+        self,
+        name: str,
+    ) -> BeamModuleProxy:
+        if self._function_name is not None or (
+            name.startswith("__") and name.endswith("__")
+        ):
+            msg = f"object '{self!r}' has no attribute '{name}'"
+            raise AttributeError(msg)
+
+        if name[0].isupper():
+            return BeamModuleProxy(self._module_name + "." + name)
+
+        return BeamModuleProxy(self._module_name, name)
+
+    def __repr__(self) -> str:
+        if self._function_name:
+            return f"<ElixirModuleProxy {self._module_name}.{self._function_name}/_>"
+
+        return f"<ElixirModuleProxy {self._module_name}>"
+
+    @overload
+    async def __call__(
+        self,
+        *args: object,
+        cast: Literal[False] = ...,
+        node: str | Atom | Term | None = ...,
+        result_encoding_opts: EncodingOpts | None = ...,
+    ) -> Any: ...  # noqa: ANN401
+
+    @overload
+    async def __call__(
+        self,
+        *args: object,
+        cast: Literal[True],
+        node: str | Atom | Term | None = ...,
+    ) -> None: ...
+
+    async def __call__(
+        self,
+        *args: object,
+        cast: bool = False,
+        node: str | Atom | Term | None = None,
+        result_encoding_opts: EncodingOpts | None = None,
+    ) -> Any:
+        if self._function_name is None:
+            msg = f"Cannot call module `{self._module_name}` directly"
+            raise TypeError(msg)
+
+        if cast:
+            return await self._cast_fn(
+                self._module_name,
+                self._function_name,
+                args,
+                node=node,
+            )
+
+        return await call(
+            self._module_name,
+            self._function_name,
+            args,
+            node=node,
+            result_encoding_opts=result_encoding_opts,
+        )
+
+
+Elixir = BeamModuleProxy("Elixir")
