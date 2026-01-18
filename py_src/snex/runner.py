@@ -219,8 +219,9 @@ async def run_loop(
 async def init(
     pipe_in: FileLike,
     pipe_out: FileLike,
+    buffer_limit: int,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    reader, writer = await transport.setup_io(pipe_in, pipe_out)
+    reader, writer = await transport.setup_io(pipe_in, pipe_out, buffer_limit)
     interface.init(writer)
 
     logger.addHandler(LoggingHandler())

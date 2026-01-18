@@ -13,6 +13,8 @@
   The write transport from Python to Elixir is now under standard Python flow control.
   This introduces a `await writer.drain()` call on the write path, which requires `send` and `cast` functions to become `async` as a side effect.
 
+  The Flow Control busy mark / buffer limit on Python side is set to the high watermark of `Snex.Interpreter`'s `:busy_limits_port` setting (8MB by default).
+
 ### Features
 
 - **`Snex.pyeval/4` can execute code with Python `return` statements**

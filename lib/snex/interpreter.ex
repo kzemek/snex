@@ -76,6 +76,7 @@ defmodule Snex.Interpreter do
   See `:erlang.open_port/2` options for detailed documentation.
 
   `:busy_limits_port` is set to `#{inspect(@default_busy_limits_port)}` if not specified.
+  The high watermark of this option is also used as the buffer limit on Python side.
   """
   @type port_opts ::
           {:parallelism, boolean()}
@@ -367,7 +368,16 @@ defmodule Snex.Interpreter do
       |> Map.put("PYTHONPATH", pythonpath)
       |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
-    default_args = ["-m", "snex"]
+    additional_port_opts =
+      opts
+      |> Keyword.get(:port_opts, [])
+      |> Keyword.take([:parallelism, :busy_limits_port, :busy_limits_msgq])
+      |> Keyword.merge(Keyword.take(opts, [:cd]))
+      |> Keyword.put_new(:busy_limits_port, @default_busy_limits_port)
+
+    {_, high_watermark} = Keyword.fetch!(additional_port_opts, :busy_limits_port)
+
+    default_args = ["-m", "snex", "--buffer-limit", to_string(high_watermark)]
 
     {exec, args} =
       case opts[:wrap_exec] do
@@ -375,13 +385,6 @@ defmodule Snex.Interpreter do
         {m, f, a} -> apply(m, f, a ++ [python, default_args])
         fun when is_function(fun, 2) -> fun.(python, default_args)
       end
-
-    additional_port_opts =
-      opts
-      |> Keyword.get(:port_opts, [])
-      |> Keyword.take([:parallelism, :busy_limits_port, :busy_limits_msgq])
-      |> Keyword.merge(Keyword.take(opts, [:cd]))
-      |> Keyword.put_new(:busy_limits_port, @default_busy_limits_port)
 
     port =
       Port.open(

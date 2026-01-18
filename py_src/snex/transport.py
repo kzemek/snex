@@ -41,10 +41,11 @@ async def write_data(
 async def setup_io(
     pipe_in: FileLike,
     pipe_out: FileLike,
+    buffer_limit: int,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     loop = asyncio.get_running_loop()
 
-    reader = asyncio.StreamReader(loop=loop)
+    reader = asyncio.StreamReader(limit=buffer_limit, loop=loop)
     protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
     await loop.connect_read_pipe(lambda: protocol, pipe_in)
 
