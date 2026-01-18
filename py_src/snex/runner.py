@@ -111,7 +111,7 @@ def run_gc(cmd: GCCommand, envs: Envs) -> None:
 
 
 async def run(
-    writer: asyncio.WriteTransport,
+    writer: asyncio.StreamWriter,
     req_id: bytes,
     command: InRequest,
     envs: Envs,
@@ -135,7 +135,7 @@ async def run(
                 reason=f"Unknown command: {command}",
             )
 
-        transport.write_data(writer, req_id, result)
+        await transport.write_data(writer, req_id, result)
     except Exception as e:  # noqa: BLE001
         error_result = ErrorResponse(
             type="error",
@@ -145,7 +145,7 @@ async def run(
         )
 
         try:
-            transport.write_data(writer, req_id, error_result)
+            await transport.write_data(writer, req_id, error_result)
         except Exception:
             logger.exception("Snex: Error sending error response")
 
@@ -169,7 +169,7 @@ async def run_noreply(command: InNoReply, req_id: bytes, envs: Envs) -> None:
 
 async def run_loop(
     reader: asyncio.StreamReader,
-    writer: asyncio.WriteTransport,
+    writer: asyncio.StreamWriter,
 ) -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
@@ -211,16 +211,16 @@ async def run_loop(
                     reason=str(e),
                     traceback=traceback.format_exception(e),
                 )
-                transport.write_data(writer, req_id, result)
+                await transport.write_data(writer, req_id, result)
             else:
                 logger.exception("Snex: Error in main loop")
 
 
 async def init(
-    erl_in: FileLike,
-    erl_out: FileLike,
-) -> tuple[asyncio.StreamReader, asyncio.WriteTransport]:
-    reader, writer = await transport.setup_io(erl_in, erl_out)
+    pipe_in: FileLike,
+    pipe_out: FileLike,
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    reader, writer = await transport.setup_io(pipe_in, pipe_out)
     interface.init(writer)
 
     logger.addHandler(LoggingHandler())

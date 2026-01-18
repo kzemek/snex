@@ -170,7 +170,7 @@ defmodule Snex.ClusterTest do
       assert {:ok, nil} =
                Snex.pyeval(
                  env,
-                 "snex.cast('Elixir.Agent', 'update', [agent, update_fn], node=this_node)",
+                 "await snex.cast('Elixir.Agent', 'update', [agent, update_fn], node=this_node)",
                  %{"agent" => TestAgent, "update_fn" => &(&1 + 100), "this_node" => node()}
                )
 

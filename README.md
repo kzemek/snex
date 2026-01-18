@@ -467,7 +467,7 @@ This works especially well with async processing, where you can send updates whi
 {:ok, env} = Snex.make_env(inp)
 
 Snex.pyeval(env, """
-  snex.send(self, b'hello from snex!')
+  await snex.send(self, b'hello from snex!')
   # insert long computation here
   """,
   %{"self" => self()}
@@ -478,7 +478,7 @@ Snex.pyeval(env, """
 # You can use any term supported by `Kernel.send/2` as destination
 Process.register(self(), :myname)
 Snex.pyeval(env, """
-  snex.send((snex.Atom('myname'), node), b'hello from snex (again!)')
+  await snex.send((snex.Atom('myname'), node), b'hello from snex (again!)')
   """,
   %{"node" => node()}
 )

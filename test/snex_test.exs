@@ -41,7 +41,7 @@ defmodule SnexTest do
   describe "sending" do
     test "can send from Python", %{env: env} do
       assert {:ok, nil} =
-               Snex.pyeval(env, "snex.send(self, b'hello from snex')", %{
+               Snex.pyeval(env, "await snex.send(self, b'hello from snex')", %{
                  "self" => Snex.Serde.term(self())
                })
 
@@ -54,7 +54,7 @@ defmodule SnexTest do
       assert {:ok, nil} =
                Snex.pyeval(
                  env,
-                 "snex.send(snex.Atom('test_send_destination'), b'hello from snex')"
+                 "await snex.send(snex.Atom('test_send_destination'), b'hello from snex')"
                )
 
       assert_receive "hello from snex"
@@ -66,7 +66,7 @@ defmodule SnexTest do
       assert {:ok, nil} =
                Snex.pyeval(
                  env,
-                 "snex.send((snex.Atom('test_sendt_destination'), node), b'hello from snex')",
+                 "await snex.send((snex.Atom('test_sendt_destination'), node), b'hello from snex')",
                  %{"node" => Snex.Serde.term(node())}
                )
 
@@ -142,7 +142,7 @@ defmodule SnexTest do
       assert {:ok, nil} =
                Snex.pyeval(
                  env,
-                 "snex.cast(snex.Atom('Elixir.Agent'), snex.Atom('update'), [agent, update_fn])",
+                 "await snex.cast(snex.Atom('Elixir.Agent'), snex.Atom('update'), [agent, update_fn])",
                  %{"agent" => agent, "update_fn" => &(&1 + 1)}
                )
 
@@ -160,7 +160,7 @@ defmodule SnexTest do
       assert {:ok, nil} =
                Snex.pyeval(
                  env,
-                 "snex.cast('Elixir.Kernel', 'send', [target, b'cast_message'])",
+                 "await snex.cast('Elixir.Kernel', 'send', [target, b'cast_message'])",
                  %{"target" => self()}
                )
 
@@ -231,7 +231,7 @@ defmodule SnexTest do
             env,
             """
             import asyncio
-            snex.send(parent, snex.Atom("running"))
+            await snex.send(parent, snex.Atom("running"))
             await asyncio.sleep(10)
             """,
             %{"parent" => self}

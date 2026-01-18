@@ -8,6 +8,11 @@
   It always felt wrong to have a result shape that depended on passed options.
   Most importantly, this change fits well with the deprecation of `:returning`.
 
+- **`snex.send` and `snex.cast` now require `await`**
+
+  The write transport from Python to Elixir is now under standard Python flow control.
+  This introduces a `await writer.drain()` call on the write path, which requires `send` and `cast` functions to become `async` as a side effect.
+
 ### Features
 
 - **`Snex.pyeval/4` can execute code with Python `return` statements**

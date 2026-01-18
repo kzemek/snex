@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     Ks = TypeVarTuple("Ks")
 
 _main_loop: AbstractEventLoop | None = None
-_writer: asyncio.WriteTransport | None = None
+_writer: asyncio.StreamWriter | None = None
 _main_thread_id: int | None = None
 
 _call_futures: dict[bytes, tuple[asyncio.Future[object], AbstractEventLoop, int]] = {}
@@ -33,19 +33,19 @@ class ElixirError(Exception):
         super().__init__(msg)
 
 
-def init(writer: asyncio.WriteTransport) -> None:
+def init(writer: asyncio.StreamWriter) -> None:
     global _main_loop, _writer, _main_thread_id  # noqa: PLW0603
     _main_loop = asyncio.get_running_loop()
     _writer = writer
     _main_thread_id = threading.get_ident()
 
 
-def _write_request(req_id: bytes, command: models.OutRequest) -> None:
+async def _write_request(req_id: bytes, command: models.OutRequest) -> None:
     if not _main_loop or not _writer or _main_thread_id is None:
         msg = "Snex is not running!"
         raise RuntimeError(msg)
 
-    _call_soon(
+    await _run_on_loop(
         _main_loop,
         _main_thread_id,
         transport.write_data,
@@ -55,7 +55,7 @@ def _write_request(req_id: bytes, command: models.OutRequest) -> None:
     )
 
 
-def send(to: object, data: object) -> None:
+async def send(to: object, data: object) -> None:
     """
     Send data to a BEAM process. Thread-safe.
 
@@ -77,10 +77,10 @@ def send(to: object, data: object) -> None:
         snex.send(self, "hello self!")
 
     """
-    cast(Atom("Elixir.Kernel"), Atom("send"), [to, data])
+    await cast(Atom("Elixir.Kernel"), Atom("send"), [to, data])
 
 
-def cast(
+async def cast(
     module: str | Atom | Term,
     function: str | Atom | Term,
     args: Iterable[object],
@@ -114,7 +114,7 @@ def cast(
     if node is not None:
         command["node"] = node
 
-    _write_request(req_id, command)
+    await _write_request(req_id, command)
 
 
 async def call(
@@ -160,7 +160,7 @@ async def call(
     if result_encoding_opts is not None:
         command["result_encoding_opts"] = result_encoding_opts
 
-    _write_request(req_id, command)
+    await _write_request(req_id, command)
     _call_futures[req_id] = (future, loop, threading.get_ident())
 
     try:

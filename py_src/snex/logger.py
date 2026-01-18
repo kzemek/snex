@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -41,6 +42,7 @@ class LoggingHandler(logging.Handler):
 
     default_metadata: dict[Atom, object]
     extra_metadata_keys: set[str]
+    write_tasks: set[asyncio.Task[None]]
 
     def __init__(
         self,
@@ -67,6 +69,7 @@ class LoggingHandler(logging.Handler):
         self.extra_metadata_keys = (
             set(extra_metadata_keys) if extra_metadata_keys else set()
         )
+        self.write_tasks = set()
 
         super().__init__(level)
 
@@ -114,11 +117,15 @@ class LoggingHandler(logging.Handler):
             if key in attrs:
                 metadata[Atom(key)] = attrs[key]
 
-        interface.cast(
-            Atom("Elixir.Logger"),
-            Atom("bare_log"),
-            [level, self.format(record), metadata],
+        task = asyncio.create_task(
+            interface.cast(
+                Atom("Elixir.Logger"),
+                Atom("bare_log"),
+                [level, self.format(record), metadata],
+            ),
         )
+        self.write_tasks.add(task)
+        task.add_done_callback(self.write_tasks.discard)
 
     @staticmethod
     def _log_level_to_atom(level: int) -> Atom:

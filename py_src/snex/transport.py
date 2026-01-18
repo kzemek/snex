@@ -17,8 +17,8 @@ if TYPE_CHECKING:
         def close(self) -> None: ...
 
 
-def write_data(
-    writer: asyncio.WriteTransport,
+async def write_data(
+    writer: asyncio.StreamWriter,
     req_id: bytes,
     data: OutRequest | OutResponse,
 ) -> None:
@@ -35,17 +35,20 @@ def write_data(
         ],
     )
     writer.writelines(data_list)
+    await writer.drain()
 
 
 async def setup_io(
-    erl_in: FileLike,
-    erl_out: FileLike,
-) -> tuple[asyncio.StreamReader, asyncio.WriteTransport]:
+    pipe_in: FileLike,
+    pipe_out: FileLike,
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     loop = asyncio.get_running_loop()
-    writer, _ = await loop.connect_write_pipe(asyncio.Protocol, erl_out)
 
-    reader = asyncio.StreamReader()
-    reader_protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: reader_protocol, erl_in)
+    reader = asyncio.StreamReader(loop=loop)
+    protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
+    await loop.connect_read_pipe(lambda: protocol, pipe_in)
+
+    transport, _ = await loop.connect_write_pipe(asyncio.Protocol, pipe_out)
+    writer = asyncio.StreamWriter(transport, protocol, reader, loop=loop)
 
     return reader, writer
