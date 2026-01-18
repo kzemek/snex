@@ -109,8 +109,8 @@ defmodule SnexTest do
                )
 
       assert reason =~ "failed on Elixir side"
-      assert reason =~ ":badarith"
-      assert reason =~ ":erlang, :div, [10, 0]"
+      assert reason =~ "ArithmeticError"
+      assert reason =~ ":erlang.div(10, 0)"
     end
 
     test "can handle multiple concurrent calls", %{env: env} do

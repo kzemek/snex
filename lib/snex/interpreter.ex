@@ -53,12 +53,11 @@ defmodule Snex.Interpreter do
 
   # credo:disable-for-next-line
   alias __MODULE__, as: State
-  defstruct [:port, :encoding_opts, pending: %{}, pending_tasks: %{}]
+  defstruct [:port, :encoding_opts, pending: %{}]
 
   @typep state :: %State{
            port: port(),
            pending: %{optional(request_id()) => %{client: GenServer.from()}},
-           pending_tasks: %{optional(Task.ref()) => request_id()},
            encoding_opts: Snex.Serde.encoding_opts()
          }
 
@@ -292,19 +291,9 @@ defmodule Snex.Interpreter do
     {:noreply, %State{state | pending: pending}}
   end
 
-  def handle_info(
-        {port, {:data, <<id::binary-size(16), @request, data::binary>>}},
-        %State{port: port} = state
-      ) do
-    task = Task.Supervisor.async_nolink(TaskSupervisor, __MODULE__, :on_python_request, [data])
-    {:noreply, %State{state | pending_tasks: Map.put(state.pending_tasks, task.ref, id)}}
-  end
-
-  def handle_info(
-        {port, {:data, <<_id::binary-size(16), @request_noreply, data::binary>>}},
-        %State{port: port} = state
-      ) do
-    {:ok, _} = Task.Supervisor.start_child(TaskSupervisor, __MODULE__, :on_python_request, [data])
+  def handle_info({port, {:data, data}}, %State{port: port} = state) do
+    args = [data, self(), state.port, state.encoding_opts]
+    {:ok, _} = Task.Supervisor.start_child(TaskSupervisor, __MODULE__, :on_python_request, args)
     {:noreply, state}
   end
 
@@ -312,38 +301,6 @@ defmodule Snex.Interpreter do
           {:stop, Snex.Error.t(), state()}
   def handle_info({port, {:exit_status, _status} = reason}, %State{port: port} = state) do
     {:stop, Snex.Error.exception(code: :interpreter_exited, reason: reason), state}
-  end
-
-  @spec handle_info({Task.ref(), term()}, state()) :: {:noreply, state()}
-  def handle_info({ref, task_result}, %State{} = state)
-      when is_map_key(state.pending_tasks, ref) do
-    Process.demonitor(ref, [:flush])
-    {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
-
-    {result, result_encoding_opts} = task_result
-    command = %Commands.CallResponse{result: result}
-    # as long as we don't let users control the encoding opts per Snex.Env,
-    # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
-    # we'll need here the env.encoding_opts of the task that called `snex.call`.
-    encoding_opts = Keyword.merge(state.encoding_opts, result_encoding_opts)
-    encoded_command = encode_command(command, @response, id, encoding_opts)
-    port_command_async(self(), state.port, encoded_command)
-
-    {:noreply, %State{state | pending_tasks: pending_tasks}}
-  end
-
-  @spec handle_info({:DOWN, Task.ref(), term(), term(), term()}, state()) :: {:noreply, state()}
-  def handle_info({:DOWN, ref, _, _, reason}, %State{} = state)
-      when is_map_key(state.pending_tasks, ref) do
-    {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
-
-    if id do
-      command = %Commands.CallErrorResponse{reason: inspect(reason)}
-      encoded_command = encode_command(command, @response, id, state.encoding_opts)
-      port_command_async(self(), state.port, encoded_command)
-    end
-
-    {:noreply, %State{state | pending_tasks: pending_tasks}}
   end
 
   @spec handle_info(any(), state()) :: {:noreply, state()}
@@ -506,10 +463,15 @@ defmodule Snex.Interpreter do
   end
 
   @doc false
-  # called by handle_info with request/request_noreply port data
-  @spec on_python_request(binary()) :: term()
-  def on_python_request(data) do
-    {:ok, %{"type" => type, "module" => m, "function" => f, "args" => a} = command} =
+  # called by handle_info with request port data
+  @spec on_python_request(binary(), pid(), port(), Snex.Serde.encoding_opts()) :: :ok
+  def on_python_request(
+        <<id::binary-size(16), @request, data::binary>>,
+        owner,
+        port,
+        encoding_opts
+      ) do
+    {:ok, %{"type" => "call", "module" => m, "function" => f, "args" => a} = command} =
       Snex.Serde.decode(data)
 
     [m, f, node] =
@@ -519,26 +481,55 @@ defmodule Snex.Interpreter do
         string when is_binary(string) -> String.to_atom(string)
       end)
 
+    result_encoding_opts =
+      Enum.map(command["result_encoding_opts"] || [], fn
+        {k, v} when is_atom(v) -> {String.to_existing_atom(k), v}
+        {k, v} when is_binary(v) -> {String.to_existing_atom(k), String.to_existing_atom(v)}
+      end)
+
     result =
-      case type do
-        _ when node in [nil, node()] -> apply(m, f, a)
-        "call" -> :erpc.call(node, m, f, a)
-        "cast" -> :erpc.cast(node, m, f, a)
-      end
+      if node in [nil, node()],
+        do: apply(m, f, a),
+        else: :erpc.call(node, m, f, a)
 
-    case type do
-      "cast" ->
-        :ok
+    command = %Commands.CallResponse{result: result}
 
-      "call" ->
-        result_encoding_opts =
-          Enum.map(command["result_encoding_opts"] || [], fn
-            {k, v} when is_atom(v) -> {String.to_existing_atom(k), v}
-            {k, v} when is_binary(v) -> {String.to_existing_atom(k), String.to_existing_atom(v)}
-          end)
+    # as long as we don't let users control the encoding opts per Snex.Env,
+    # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
+    # we'll need here the env.encoding_opts of the task that called `snex.call`.
+    encoding_opts = Keyword.merge(encoding_opts, result_encoding_opts)
+    encoded_command = encode_command(command, @response, id, encoding_opts)
+    port_command_async(owner, port, encoded_command)
 
-        {result, result_encoding_opts}
-    end
+    :ok
+  catch
+    kind, error ->
+      command = %Commands.CallErrorResponse{reason: Exception.format(kind, error, __STACKTRACE__)}
+      encoded_command = encode_command(command, @response, id, [])
+      port_command_async(owner, port, encoded_command)
+  end
+
+  def on_python_request(
+        <<_id::binary-size(16), @request_noreply, data::binary>>,
+        _owner,
+        _port,
+        _encoding_opts
+      ) do
+    {:ok, %{"type" => "cast", "module" => m, "function" => f, "args" => a} = command} =
+      Snex.Serde.decode(data)
+
+    [m, f, node] =
+      Enum.map([m, f, command["node"]], fn
+        atom when is_atom(atom) -> atom
+        # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
+        string when is_binary(string) -> String.to_atom(string)
+      end)
+
+    if node in [nil, node()],
+      do: apply(m, f, a),
+      else: :erpc.cast(node, m, f, a)
+
+    :ok
   end
 
   defp generate_request_id,

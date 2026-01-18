@@ -64,6 +64,10 @@
 
 ### Changes
 
+- **Elixir exceptions in `snex.call()` are now returned formatted with `Exception.format/3`**
+
+  Previously it was just an `inspect(exc)`, which was of limited usefulness.
+
 - **Set line location with `ast` manipulation & cache code compilation**
 
   Both changes bring a sizeable reduction of `Snex.pyeval/4` execution overhead.
@@ -94,7 +98,7 @@
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**
 
-- **Lots of smaller refactors for code clarity and improved performance**
+- **_Lots_ of smaller refactors for code clarity and improved performance**
 
 ## 0.3.2
 
