@@ -35,6 +35,11 @@
 
   Snex's Python code dogfoods the handler to replace its error logging `print`s.
 
+- **Add `result_encoding_opts` settings to Python `snex.call`**
+
+  Allows to modify the way Elixir results are encoded to Python objects when using `snex.call`.
+  Supports same options as Elixir-side `t:Snex.Serde.encoding_opts/0`.
+
 - **`Snex.pyeval/4` can be called with interpreter instead of `%Snex.Env{}`**
 
   Simplifies setup for one-off commands.

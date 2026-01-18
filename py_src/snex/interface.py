@@ -1,11 +1,24 @@
+from __future__ import annotations
+
 import asyncio
 import threading
 from asyncio import AbstractEventLoop
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import models, transport
-from .models import Atom, Term
+from .models import Atom, EncodingOpts, Term
+
+if TYPE_CHECKING:
+    from asyncio import AbstractEventLoop
+    from collections.abc import Iterable
+    from typing import Any, ParamSpec, TypeVar, TypeVarTuple
+
+    from .models import Term
+
+    T = TypeVar("T")
+    Ts = ParamSpec("Ts")
+    Ks = TypeVarTuple("Ks")
 
 _main_loop: AbstractEventLoop | None = None
 _writer: asyncio.WriteTransport | None = None
@@ -92,8 +105,10 @@ def cast(
         module=module,
         function=function,
         args=list(args),
-        node=node,
     )
+
+    if node is not None:
+        command["node"] = node
 
     _write_request(req_id, command)
 
@@ -104,6 +119,7 @@ async def call(
     args: Iterable[object],
     *,
     node: str | Atom | Term | None = None,
+    result_encoding_opts: EncodingOpts | None = None,
 ) -> Any:  # noqa: ANN401
     """
     Call a function in BEAM, returning the result. Thread-safe.
@@ -119,6 +135,8 @@ async def call(
         function: The function to call
         args: The arguments to pass to the function
         node: The node to call the function on; defaults to the current node
+        result_encoding_opts: The options to use for encoding the result. \
+            They will override the interpreter's `:encoding_opts`.
 
     """
     loop = asyncio.get_running_loop()
@@ -130,8 +148,13 @@ async def call(
         module=module,
         function=function,
         args=list(args),
-        node=node,
     )
+
+    if node is not None:
+        command["node"] = node
+
+    if result_encoding_opts is not None:
+        command["result_encoding_opts"] = result_encoding_opts
 
     _write_request(req_id, command)
     _call_futures[req_id] = (future, loop, threading.get_ident())

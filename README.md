@@ -500,6 +500,9 @@ In fact, `snex.send` is just a convenient interface on top of `snex.cast`!
 Both functions will run `apply(m, f, a)` in a new process (`m` and `f` will be converted to atoms if given as `str`).
 They also accept an optional `node` argument to apply the function on a remote node.
 
+Additionally, `snex.call` accepts `result_encoding_opts` to control how the result is encoded to Python.
+See [Python Interface Documentation / snex.EncodingOpts](https://hexdocs.pm/snex/Python_Interface_Documentation.html#t:snex.EncodingOpts/0) for more details.
+
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
 {:ok, agent} = Agent.start_link(fn -> 42 end)
@@ -534,7 +537,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 535, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 538, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.

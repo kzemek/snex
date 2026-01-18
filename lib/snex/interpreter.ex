@@ -314,15 +314,18 @@ defmodule Snex.Interpreter do
   end
 
   @spec handle_info({Task.ref(), term()}, state()) :: {:noreply, state()}
-  def handle_info({ref, result}, %State{} = state) when is_map_key(state.pending_tasks, ref) do
+  def handle_info({ref, task_result}, %State{} = state)
+      when is_map_key(state.pending_tasks, ref) do
     Process.demonitor(ref, [:flush])
     {id, pending_tasks} = Map.pop!(state.pending_tasks, ref)
 
+    {result, result_encoding_opts} = task_result
     command = %Commands.CallResponse{result: result}
-    encoded_command = encode_command(command, @response, id, state.encoding_opts)
     # as long as we don't let users control the encoding opts per Snex.Env,
     # state.encoding_opts === env.encoding_opts. OTOH if/when we give that option,
     # we'll need here the env.encoding_opts of the task that called `snex.call`.
+    encoding_opts = Keyword.merge(state.encoding_opts, result_encoding_opts)
+    encoded_command = encode_command(command, @response, id, encoding_opts)
     port_command_async(self(), state.port, encoded_command)
 
     {:noreply, %State{state | pending_tasks: pending_tasks}}
@@ -501,22 +504,37 @@ defmodule Snex.Interpreter do
 
   @doc false
   # called by handle_info with request/request_noreply port data
-  @spec on_python_request(binary()) :: :noreply | term()
+  @spec on_python_request(binary()) :: term()
   def on_python_request(data) do
-    {:ok, %{"type" => type, "module" => m, "function" => f, "args" => a, "node" => node}} =
+    {:ok, %{"type" => type, "module" => m, "function" => f, "args" => a} = command} =
       Snex.Serde.decode(data)
 
     [m, f, node] =
-      Enum.map([m, f, node], fn
+      Enum.map([m, f, command["node"]], fn
         atom when is_atom(atom) -> atom
         # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
         string when is_binary(string) -> String.to_atom(string)
       end)
 
+    result =
+      case type do
+        _ when node in [nil, node()] -> apply(m, f, a)
+        "call" -> :erpc.call(node, m, f, a)
+        "cast" -> :erpc.cast(node, m, f, a)
+      end
+
     case type do
-      _ when node in [nil, node()] -> apply(m, f, a)
-      "call" -> :erpc.call(node, m, f, a)
-      "cast" -> :erpc.cast(node, m, f, a)
+      "cast" ->
+        :ok
+
+      "call" ->
+        result_encoding_opts =
+          Enum.map(command["result_encoding_opts"] || [], fn
+            {k, v} when is_atom(v) -> {String.to_existing_atom(k), v}
+            {k, v} when is_binary(v) -> {String.to_existing_atom(k), String.to_existing_atom(v)}
+          end)
+
+        {result, result_encoding_opts}
     end
   end
 

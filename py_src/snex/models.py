@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import random
+import sys
 from enum import IntEnum
 from typing import TYPE_CHECKING, Literal, NewType, TypedDict
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        pass
+
 
 if TYPE_CHECKING:
     from typing import NotRequired
@@ -122,20 +132,76 @@ class OkResponse(TypedDict):
     value: object
 
 
+class EncodingOpt:
+    """Options for encoding Elixir terms into Python objects."""
+
+    class BinaryAs(StrEnum):
+        """
+        The representation of Elixir binaries on the Python side.
+
+        - `STR` (`"str"`) encodes binary as `str`
+        - `BYTES` (`"bytes"`) encodes binary as `bytes`
+        - `BYTEARRAY` (`"bytearray"`) encodes binary as `bytearray`
+        """
+
+        STR = Atom("str")
+        BYTES = Atom("bytes")
+        BYTEARRAY = Atom("bytearray")
+
+    class SetAs(StrEnum):
+        """
+        The representation of Elixir `MapSet`s on the Python side.
+
+        - `SET` (`"set"`) encodes `MapSet` as `set`
+        - `FROZENSET` (`"frozenset"`) encodes `MapSet` as `frozenset`
+        """
+
+        SET = Atom("set")
+        FROZENSET = Atom("frozenset")
+
+    class AtomAs(StrEnum):
+        """
+        The representation of Elixir atoms on the Python side.
+
+        - `ATOM` (`"atom"`) encodes atom as `snex.Atom`
+        - `DISTINCT_ATOM` (`"distinct_atom"`) encodes atom as `snex.DistinctAtom`
+        """
+
+        ATOM = Atom("atom")
+        DISTINCT_ATOM = Atom("distinct_atom")
+
+
+class EncodingOpts(TypedDict):
+    """
+    Configuration for encoding Elixir terms into Python objects.
+
+    Attributes:
+        binary_as (NotRequired[EncodingOpt.BinaryAs]): How Elixir binaries are encoded
+        set_as (NotRequired[EncodingOpt.SetAs]): How Elixir `MapSet`s are encoded
+        atom_as (NotRequired[EncodingOpt.AtomAs]): How Elixir atoms are encoded
+
+    """
+
+    binary_as: NotRequired[EncodingOpt.BinaryAs]
+    set_as: NotRequired[EncodingOpt.SetAs]
+    atom_as: NotRequired[EncodingOpt.AtomAs]
+
+
 class CallCommand(TypedDict):
     type: Literal["call"]
     module: str | Atom | Term
     function: str | Atom | Term
-    node: str | Atom | Term | None
     args: list[object]
+    node: NotRequired[str | Atom | Term]
+    result_encoding_opts: NotRequired[EncodingOpts]
 
 
 class CastCommand(TypedDict):
     type: Literal["cast"]
     module: str | Atom | Term
     function: str | Atom | Term
-    node: str | Atom | Term | None
     args: list[object]
+    node: NotRequired[str | Atom | Term]
 
 
 class CallResponse(TypedDict):

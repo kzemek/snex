@@ -2,6 +2,7 @@ defmodule Snex.SerdeTest do
   use ExUnit.Case, async: true
 
   import Bitwise
+  import Snex.Sigils
 
   setup_all do
     interpreter = start_link_supervised!({Snex.Interpreter, init_script: "import math, datetime"})
@@ -694,6 +695,50 @@ defmodule Snex.SerdeTest do
                """)
 
       assert {:ok, ~D[2025-12-28]} = Snex.pyeval(env, "return datetime.date(2025, 12, 28)")
+    end
+  end
+
+  describe "snex.call result_encoding_opts" do
+    test "can override binary_as for call results", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(
+                 env,
+                 ~P"""
+                 result = await snex.call(
+                   'Elixir.Kernel', 'inspect', [42],
+                   result_encoding_opts={"binary_as": snex.EncodingOpt.BinaryAs.BYTES},
+                 )
+                 return type(result) is bytes and result == b'42'
+                 """
+               )
+    end
+
+    test "can override atom_as for call results", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(
+                 env,
+                 ~P"""
+                 result = await snex.call(
+                   'Elixir.String', 'to_atom', ['hello'],
+                   result_encoding_opts={"atom_as": snex.EncodingOpt.AtomAs.DISTINCT_ATOM},
+                 )
+                 return type(result) is snex.DistinctAtom and result != 'hello'
+                 """
+               )
+    end
+
+    test "can override set_as for call results", %{env: env} do
+      assert {:ok, true} =
+               Snex.pyeval(
+                 env,
+                 ~P"""
+                 result = await snex.call(
+                   'Elixir.MapSet', 'new', [[1, 2, 3]],
+                   result_encoding_opts={"set_as": snex.EncodingOpt.SetAs.FROZENSET},
+                 )
+                 return type(result) is frozenset and result == {1, 2, 3}
+                 """
+               )
     end
   end
 
