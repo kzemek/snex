@@ -88,6 +88,7 @@ end
   - [Send messages from Python code](#send-messages-from-python-code)
   - [Cast and call Elixir code from Python](#cast-and-call-elixir-code-from-python)
   - [Accurate code locations in Python traces](#accurate-code-locations-in-python-traces)
+  - [Using Elixir `Logger` from Python](#using-elixir-logger-from-python)
 
 ### Custom Interpreter
 
@@ -529,7 +530,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 530, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 531, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
@@ -541,4 +542,33 @@ iex> IO.puts(~p"12\t#{34}")
 12  34
 iex> IO.puts(~P"12\t#{34}")
 12\t#{34}
+```
+
+#### Using Elixir `Logger` from Python
+
+`snex` Python module provides a `snex.LoggingHandler` class for logging to Elixir's `Logger` from Python.
+`snex.LoggingHandler` subclasses `logging.Handler`, and can be used with traditional Python's `logging` subsystem.
+
+Among other things, `snex.LoggingHandler` ensures that Elixir-side log has proper location information and timestamp.
+It also adds several extra metadata parameters, all prefixed with `python_`.
+
+Besides the standard `level` argument, `snex.LoggingHandler` also accepts `default_metadata` and `extra_metadata_keys` keyword arguments.
+`default_metadata` is merged into the metadata passed to Elixir's `Logger`.
+`extra_metadata_keys` specifies which keys from the Python `logging` functions' `extra` dictionary should be included.
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+logger.addHandler(
+  LoggingHandler(
+    default_metadata={"application": "my_app"},
+    extra_metadata_keys={"foo"}
+  ),
+)
+
+logger.info("hello from Python", extra={"foo": "bar"})
+
+# depending on your Elixir Logger's metadata settings, you may see a line similar to
+# [info] hello from Python application=my_app foo=bar python_module=mymodule
 ```

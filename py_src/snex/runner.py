@@ -3,14 +3,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import functools
+import logging
 import pickle
-import sys
 import traceback
 from typing import Final
 
 import snex
 
 from . import code, interface, transport
+from .logger import LoggingHandler
 from .models import (
     EnvID,
     ErrorResponse,
@@ -30,6 +31,8 @@ Envs = dict[EnvID, dict[str, object]]
 
 ID_LEN_BYTES: Final[int] = 16
 ROOT_ENV_ID: Final[EnvID] = EnvID(b"root")
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def env_id_to_str(env_id: EnvID) -> str:
@@ -167,6 +170,8 @@ def on_task_done_reply(
 
     except asyncio.CancelledError:
         pass
+    except Exception:
+        logger.exception("Snex: Error sending response")
 
 
 def on_task_done_noreply(
@@ -176,9 +181,11 @@ def on_task_done_noreply(
     running_tasks.discard(task)
 
     try:
-        exc = task.exception()
-        if exc is not None:
-            traceback.print_exception(exc, file=sys.stderr)
+        if exc := task.exception():
+            logger.error(
+                "Snex: Error processing a no-reply request ",
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
 
     except asyncio.CancelledError:
         pass
@@ -192,6 +199,8 @@ async def run_loop() -> None:
     reader, writer = await transport.setup_io(loop)
     interface.init(writer)
 
+    logger.addHandler(LoggingHandler())
+
     while True:
         try:
             byte_cnt = int.from_bytes(await reader.readexactly(4), "big")
@@ -200,10 +209,7 @@ async def run_loop() -> None:
             break
 
         if len(all_data) < ID_LEN_BYTES + 1:
-            print(  # noqa: T201
-                "Invalid data: not enough bytes for a message type and ID",
-                file=sys.stderr,
-            )
+            logger.critical("Snex: not enough bytes for a message type and ID")
             continue
 
         req_id = bytes(all_data[:ID_LEN_BYTES])
@@ -236,7 +242,7 @@ async def run_loop() -> None:
                 )
         except asyncio.CancelledError:
             break
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             if message_type == MessageType.REQUEST:
                 result = ErrorResponse(
                     type="error",
@@ -246,4 +252,4 @@ async def run_loop() -> None:
                 )
                 transport.write_data(writer, req_id, result)
             else:
-                traceback.print_exception(e, file=sys.stderr)
+                logger.exception("Snex: Error in main loop")

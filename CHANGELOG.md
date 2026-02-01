@@ -15,6 +15,21 @@
   `Snex.pyeval/4` is now able to parse and execute `return` statements in Python code.
   This obsoletes the `:returning` option, which now emits a deprecation warning.
 
+- **`snex.LoggingHandler`**
+
+  Snex Python interface now a `snex.LoggingHandler` class for use with Python's `logging`.
+  The class can be used with Python's `logging` to log messages from Python with Elixir's `Logger`.
+
+  ```python
+  import logging
+  import snex
+  logger = logging.getLogger(__name__)
+  logger.addHandler(snex.LoggingHandler())
+  logger.info("hello from Python!")
+  ```
+
+  Snex's Python code dogfoods the handler to replace its error logging `print`s.
+
 - **`Snex.pyeval/4` can be called with interpreter instead of `%Snex.Env{}`**
 
   Simplifies setup for one-off commands.
@@ -46,6 +61,8 @@
   stdout/stderr is handled through Erlang, and line offsets get mangled without carriage return.
 
 - **Improve logs in exceptional circumstances**
+
+  The improved logs are now logged with Elixir's Logger.
 
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
