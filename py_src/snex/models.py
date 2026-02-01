@@ -38,8 +38,22 @@ class DistinctAtom(Atom):
         return f"snex.DistinctAtom({self!s})"
 
 
-class Term(bytes):
-    __slots__ = ()
+class Term:
+    __slots__ = ("value",)
+
+    value: bytes
+
+    def __init__(self, value: bytes) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Term) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash((Term, self.value))
+
+    def __repr__(self) -> str:
+        return object.__repr__(self)
 
 
 class Code(TypedDict):

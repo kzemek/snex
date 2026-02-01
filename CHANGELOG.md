@@ -64,6 +64,10 @@
 
   The improved logs are now logged with Elixir's Logger.
 
+- **Change `snex.Term` to not subclass `bytes`**
+
+  Not a breaking change as `snex.Term` is considered opaque - this is meant to reinforce it.
+
 - **Document that `Snex.pyeval/4` can run over timeout if suspended on port send**
 
 - **Document thread-safety of `snex.{send,cast,call}` functions**
