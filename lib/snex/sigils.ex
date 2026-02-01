@@ -2,7 +2,7 @@ defmodule Snex.Sigils do
   @moduledoc """
   Sigils for creating `Snex.Code` structs.
 
-  `~p` and `~P` sigils create `Snex.Code` structs with location metadata.
+  `~p`, `~P` and `~PY` sigils create `Snex.Code` structs with location metadata.
   This is used for accurate stacktraces on Python side.
 
       iex> Snex.pyeval(env, ~p"raise RuntimeError('test')")
@@ -51,6 +51,17 @@ defmodule Snex.Sigils do
   defmacro sigil_P(src, opts) do
     quote do
       sigil_p(unquote(src), unquote(opts))
+    end
+  end
+
+  @doc """
+  Handles the sigil `~PY` for location-annotated Python code.
+
+  This is a more readable alias for [sigil `~P`](`sigil_P/2`).
+  """
+  defmacro sigil_PY(src, opts) do
+    quote do
+      sigil_P(unquote(src), unquote(opts))
     end
   end
 end

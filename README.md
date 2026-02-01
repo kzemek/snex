@@ -528,7 +528,7 @@ When you inspect a stacktrace, or receive an exception result, your code will ha
 ~s'  File "<Snex.Code>", line 1, in <module>\n' = Enum.at(reason.traceback, -2)
 ```
 
-To help with that, Snex defines sigils `~p` and `~P` that annotate your code with location information, building a `Snex.Code` struct out of your string literal.
+To help with that, Snex defines sigils `~p` and `~P` (also aliased as `~PY`) that annotate your code with location information, building a `Snex.Code` struct out of your string literal.
 
 ```elixir
 import Snex.Sigils
@@ -542,12 +542,14 @@ assert ~s'  File "#{__ENV__.file}", line 538, in <module>\n' == Enum.at(reason.t
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
 
-As with other sigils, lowercase `~p` interpolates and parses escapes in the literal, while uppercase `~P` passes the literal as-is:
+As with other sigils, lowercase `~p` interpolates and parses escapes in the literal, while uppercase `~P` (and `~PY`) passes the literal as-is:
 
 ```elixir
 iex> IO.puts(~p"12\t#{34}")
 12  34
 iex> IO.puts(~P"12\t#{34}")
+12\t#{34}
+iex> IO.puts(~PY"12\t#{34}")
 12\t#{34}
 ```
 

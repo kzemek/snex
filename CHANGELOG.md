@@ -50,6 +50,11 @@
   These can be configured with `:port_opts` opt in `Snex.Interpreter.start_link/1`.
   If not configured, `:busy_limits_port` is set to `{4MB, 8MB}`, up from Erlang's default of `{4kB, 8kB}`.
 
+- **Add `sigil_PY` to `Snex.Sigils`**
+
+  `~PY"return 1"` is exactly the same as `~P"return 1"`, but slightly more obvious in its purpose and less likely to clash with other custom sigils.
+  It's also unfortunately assymetric, as Elixir doesn't allow a lowercase `sigil_py`.
+
 ### Changes
 
 - **Set line location with `ast` manipulation & cache code compilation**
