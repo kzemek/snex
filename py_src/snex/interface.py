@@ -1,6 +1,7 @@
 import asyncio
 import threading
 from asyncio import AbstractEventLoop
+from collections.abc import Iterable
 from typing import Any
 
 from . import models, transport
@@ -42,9 +43,21 @@ def send(to: object, data: object) -> None:
     Send data to a BEAM process. Thread-safe.
 
     Args:
-        to: The BEAM process to send the data to; can be any identifier that can be used
-            as destination in `Kernel.send/2`
+        to: The BEAM process to send the data to; can be any identifier that can be \
+            used as destination in `Kernel.send/2`
         data: The data to send; will be encoded and sent to the BEAM process
+
+    Examples::
+
+        # Send to a registered process with an atom name
+        snex.send("registered_name", "hello to a registered process!")
+
+        # Send to a remote process with a tuple name and node
+        snex.send(("myname", "mynode@localhost"), "hello to a remote process!")
+
+        # Use `snex.Term` passed through with `Snex.pyeval/4`
+        # e.g. `Snex.pyeval(env, "snex.cast(self, 'hello self!')", %{"self" => self()}`)
+        snex.send(self, "hello self!")
 
     """
     cast(Atom("Elixir.Kernel"), Atom("send"), [to, data])
@@ -53,7 +66,7 @@ def send(to: object, data: object) -> None:
 def cast(
     module: str | Atom | Term,
     function: str | Atom | Term,
-    args: list[object],
+    args: Iterable[object],
     *,
     node: str | Atom | Term | None = None,
 ) -> None:
@@ -78,7 +91,7 @@ def cast(
         type="cast",
         module=module,
         function=function,
-        args=args,
+        args=list(args),
         node=node,
     )
 
@@ -88,7 +101,7 @@ def cast(
 async def call(
     module: str | Atom | Term,
     function: str | Atom | Term,
-    args: list[object],
+    args: Iterable[object],
     *,
     node: str | Atom | Term | None = None,
 ) -> Any:  # noqa: ANN401
@@ -116,7 +129,7 @@ async def call(
         type="call",
         module=module,
         function=function,
-        args=args,
+        args=list(args),
         node=node,
     )
 

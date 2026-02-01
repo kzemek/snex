@@ -70,6 +70,10 @@ end
 # See Releases section in the README on how to configure mix release
 ```
 
+## Python interface documentation
+
+See [Python Interface Documentation on HexDocs](https://hexdocs.pm/Snex/Python_Interface_Documentation.html)
+
 ## Core Concepts & Usage
 
 - [Custom Interpreter](#custom-interpreter)
@@ -494,7 +498,7 @@ In fact, `snex.send` is just a convenient interface on top of `snex.cast`!
 `snex.cast` and `snex.call` differ only in how they handle results.
 `snex.call` must be awaited on, and will return the result of whatever was called, while `snex.cast` is fire-and-forget.
 Both functions will run `apply(m, f, a)` in a new process (`m` and `f` will be converted to atoms if given as `str`).
-They also accept an optional `node` argument to apply the function on a remote node - as long as it's also running the `:snex` application.
+They also accept an optional `node` argument to apply the function on a remote node.
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
@@ -530,7 +534,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 531, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 535, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.

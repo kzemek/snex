@@ -1,5 +1,9 @@
 import Config
 
+if config_env() == :dev do
+  config :makeup_syntect, register_for_languages: ["python"]
+end
+
 if config_env() == :test do
   config :logger, :default_formatter,
     format: "[$level] $message $metadata\n",

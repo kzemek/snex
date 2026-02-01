@@ -16,6 +16,12 @@ def generate_id() -> bytes:
 
 
 class Atom(str):
+    """
+    Atom represents an Elixir atom.
+
+    Will be converted to atom when decoded in Elixir.
+    """
+
     __slots__ = ()
 
     def __repr__(self) -> str:
@@ -23,22 +29,41 @@ class Atom(str):
 
 
 class DistinctAtom(Atom):
+    """
+    DistinctAtom represents an Elixir atom that is not equal to a bare `str`.
+
+    Will be converted to atom when decoded in Elixir.
+
+    Unlike `snex.Atom`, `snex.DistinctAtom` does not compare equal to a bare `str`
+    (or, by extension, `snex.Atom`). In other words, `"foo" != snex.DistinctAtom("foo")`
+    while `"foo" == snex.Atom("foo")`.  This allows to mix atom and string keys
+    in a dictionary.
+    """
+
     __slots__ = ()
 
     def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and super().__eq__(other)
+        return isinstance(other, DistinctAtom) and super().__eq__(other)
 
     def __ne__(self, other: object) -> bool:
-        return type(self) is not type(other) or super().__ne__(other)
+        return not isinstance(other, DistinctAtom) or super().__ne__(other)
 
     def __hash__(self) -> int:
-        return hash((type(self), str(self)))
+        return hash((DistinctAtom, str(self)))
 
     def __repr__(self) -> str:
         return f"snex.DistinctAtom({self!s})"
 
 
 class Term:
+    """
+    Term represents an Elixir term, opaque on Python side.
+
+    Created on Elixir side by encoding otherwise unserializable terms, or wrapping
+    a term with `Snex.Serde.term/1`. It's not supposed to be created or modified
+    on Python side. It's decoded back to the original term on Elixir side.
+    """
+
     __slots__ = ("value",)
 
     value: bytes

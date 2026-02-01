@@ -15,6 +15,11 @@
   `Snex.pyeval/4` is now able to parse and execute `return` statements in Python code.
   This obsoletes the `:returning` option, which now emits a deprecation warning.
 
+- **`snex` Python module documentation**
+
+  `snex` Python module is now documented using `ExDoc`!
+  Available through `mix docs`, or [on HexDocs](https://hexdocs.pm/Python_Interface_Documentation.ex) once the release is published.
+
 - **`snex.LoggingHandler`**
 
   Snex Python interface now a `snex.LoggingHandler` class for use with Python's `logging`.
