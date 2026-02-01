@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 import logging
-from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
 from . import interface
+from .compat import override
 from .models import Atom
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 class LoggingHandler(logging.Handler):
@@ -64,6 +70,7 @@ class LoggingHandler(logging.Handler):
 
         super().__init__(level)
 
+    @override
     def emit(self, record: logging.LogRecord) -> None:
         attrs = record.__dict__
 

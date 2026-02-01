@@ -8,7 +8,7 @@ dependencies = []
 dev = ["mypy>=1.15.0", "ruff>=0.11.10"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 check_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
@@ -20,6 +20,7 @@ warn_unused_configs = true
 
 [tool.ruff.lint]
 select = ["ALL"]
+typing-modules = ["snex.compat"]
 ignore = [
     "D100",
     "D101",

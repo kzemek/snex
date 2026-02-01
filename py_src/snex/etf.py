@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import functools
 import struct
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from .models import Atom, Term
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Any
 
-Parts = list[bytes | bytearray | memoryview]
+    Parts = list[bytes | bytearray | memoryview]
 
 ETF_VERSION = 131
 

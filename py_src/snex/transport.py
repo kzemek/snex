@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
 
 from snex import models
 
 from . import etf
-from .models import OutRequest, OutResponse
+
+if TYPE_CHECKING:
+    from .models import OutRequest, OutResponse
 
 
 def write_data(

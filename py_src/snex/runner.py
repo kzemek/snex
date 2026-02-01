@@ -6,7 +6,7 @@ import functools
 import logging
 import pickle
 import traceback
-from typing import Final
+from typing import TYPE_CHECKING
 
 import snex
 
@@ -27,7 +27,10 @@ from .models import (
     generate_id,
 )
 
-Envs = dict[EnvID, dict[str, object]]
+if TYPE_CHECKING:
+    from typing import Final
+
+    Envs = dict[EnvID, dict[str, object]]
 
 ID_LEN_BYTES: Final[int] = 16
 ROOT_ENV_ID: Final[EnvID] = EnvID(b"root")
@@ -74,7 +77,7 @@ def run_make_env(cmd: MakeEnvCommand, envs: Envs) -> OkResponse | ErrorResponse:
 
     env.update(cmd["additional_vars"])
 
-    env_id = EnvID(generate_id())
+    env_id = generate_id()
     envs[env_id] = env
 
     return OkResponse(type="ok", value=env_id)

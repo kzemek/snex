@@ -102,12 +102,12 @@ defmodule Snex.MixProject do
 
   defp ruff(_) do
     Mix.shell().info("Running ruff")
-    Mix.shell().cmd("uv run ruff check", cd: "py_src")
+    Mix.shell().cmd("uv run --python 3.14 ruff check", cd: "py_src")
   end
 
   defp mypy(_) do
     Mix.shell().info("Running mypy")
-    Mix.shell().cmd("uv run mypy --strict .", cd: "py_src")
+    Mix.shell().cmd("uv run --python 3.14 mypy --strict .", cd: "py_src")
   end
 
   defp gen_python_doc(_) do

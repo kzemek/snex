@@ -4,7 +4,7 @@ import asyncio
 import threading
 from asyncio import AbstractEventLoop
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from . import models, transport
 from .models import Atom, EncodingOpts, Term
@@ -12,13 +12,9 @@ from .models import Atom, EncodingOpts, Term
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
     from collections.abc import Iterable
-    from typing import Any, ParamSpec, TypeVar, TypeVarTuple
+    from typing import Any
 
     from .models import Term
-
-    T = TypeVar("T")
-    Ts = ParamSpec("Ts")
-    Ks = TypeVarTuple("Ks")
 
 _main_loop: AbstractEventLoop | None = None
 _writer: asyncio.WriteTransport | None = None
