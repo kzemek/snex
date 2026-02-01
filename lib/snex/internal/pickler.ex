@@ -230,17 +230,17 @@ defmodule Snex.Internal.Pickler do
     end
   end
 
-  # Dialyzer complains on %^struct{} match
-  @dialyzer {:no_opaque, encode_struct: 2}
+  # Dialyzer complains on is_struct(same_type, struct) match because it doesn't know
+  # that users can define their own protocols
   @dialyzer {:no_match, encode_struct: 2}
   defp encode_struct(%struct{} = s, opts) do
     case Serde.Encoder.impl_for(s) do
       nil ->
         encode_map(s, opts)
 
-      encoder ->
+      encoder when encoder != nil ->
         case encoder.encode(s) do
-          %^struct{} = same_struct_type -> encode_map(same_struct_type, opts)
+          same_type when is_struct(same_type, struct) -> encode_map(same_type, opts)
           encoded -> do_encode(encoded, opts)
         end
     end

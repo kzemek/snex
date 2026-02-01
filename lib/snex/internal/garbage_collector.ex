@@ -6,8 +6,6 @@ defmodule Snex.Internal.GarbageCollector do
 
   use GenServer
 
-  require Logger
-
   @spec start_link(opts :: Keyword.t()) :: GenServer.on_start()
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
