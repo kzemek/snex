@@ -11,10 +11,14 @@ from .models import Atom, EncodingOpts, Term
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
-    from collections.abc import Iterable
-    from typing import Any
+    from collections.abc import Callable, Coroutine, Iterable
+    from typing import Any, ParamSpec, TypeVar, TypeVarTuple, Unpack
 
     from .models import Term
+
+    T = TypeVar("T")
+    Ts = ParamSpec("Ts")
+    Ks = TypeVarTuple("Ks")
 
 _main_loop: AbstractEventLoop | None = None
 _writer: asyncio.WriteTransport | None = None
@@ -41,10 +45,14 @@ def _write_request(req_id: bytes, command: models.OutRequest) -> None:
         msg = "Snex is not running!"
         raise RuntimeError(msg)
 
-    if threading.get_ident() == _main_thread_id:
-        transport.write_data(_writer, req_id, command)
-    else:
-        _main_loop.call_soon_threadsafe(transport.write_data, _writer, req_id, command)
+    _call_soon(
+        _main_loop,
+        _main_thread_id,
+        transport.write_data,
+        _writer,
+        req_id,
+        command,
+    )
 
 
 def send(to: object, data: object) -> None:
@@ -174,13 +182,35 @@ def on_call_response(
     future, loop, thread_id = entry
 
     if response["type"] == "call_response":
-        if threading.get_ident() == thread_id:
-            future.set_result(response["result"])
-        else:
-            loop.call_soon_threadsafe(future.set_result, response["result"])
+        _call_soon(loop, thread_id, future.set_result, response["result"])
     else:
         exc = ElixirError(req_id, response["reason"])
-        if threading.get_ident() == thread_id:
-            future.set_exception(exc)
-        else:
-            loop.call_soon_threadsafe(future.set_exception, exc)
+        _call_soon(loop, thread_id, future.set_exception, exc)
+
+
+def _call_soon(
+    loop: AbstractEventLoop,
+    loop_thread_id: int,
+    func: Callable[[*Ks], None],
+    *args: Unpack[Ks],
+) -> None:
+    if threading.get_ident() == loop_thread_id:
+        func(*args)
+    else:
+        loop.call_soon_threadsafe(func, *args)
+
+
+async def _run_on_loop(
+    loop: AbstractEventLoop,
+    loop_thread_id: int,
+    func: Callable[Ts, Coroutine[Any, Any, T]],
+    *args: Ts.args,
+    **kwargs: Ts.kwargs,
+) -> T:
+    coro = func(*args, **kwargs)
+
+    if threading.get_ident() == loop_thread_id:
+        return await coro
+
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return await asyncio.wrap_future(future)
