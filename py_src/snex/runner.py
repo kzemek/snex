@@ -30,6 +30,8 @@ from .models import (
 if TYPE_CHECKING:
     from typing import Final
 
+    from .transport import FileLike
+
     Envs = dict[EnvID, dict[str, object]]
 
 ID_LEN_BYTES: Final[int] = 16
@@ -194,19 +196,18 @@ def on_task_done_noreply(
         pass
 
 
-async def run_loop() -> None:
+async def run_loop(
+    reader: asyncio.StreamReader,
+    writer: asyncio.WriteTransport,
+) -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
     envs: Envs = {ROOT_ENV_ID: {"snex": snex, "_SnexReturn": code.SnexReturn}}
 
-    reader, writer = await transport.setup_io(loop)
-    interface.init(writer)
-
-    logger.addHandler(LoggingHandler())
-
     while True:
         try:
-            byte_cnt = int.from_bytes(await reader.readexactly(4), "big")
+            byte_cnt_bytes = await reader.readexactly(4)
+            byte_cnt = int.from_bytes(byte_cnt_bytes, "big")
             all_data = memoryview(await reader.readexactly(byte_cnt))
         except asyncio.IncompleteReadError:
             break
@@ -243,8 +244,6 @@ async def run_loop() -> None:
                         running_tasks,
                     ),
                 )
-        except asyncio.CancelledError:
-            break
         except Exception as e:
             if message_type == MessageType.REQUEST:
                 result = ErrorResponse(
@@ -256,3 +255,14 @@ async def run_loop() -> None:
                 transport.write_data(writer, req_id, result)
             else:
                 logger.exception("Snex: Error in main loop")
+
+
+async def init(
+    erl_in: FileLike,
+    erl_out: FileLike,
+) -> tuple[asyncio.StreamReader, asyncio.WriteTransport]:
+    reader, writer = await transport.setup_io(erl_in, erl_out)
+    interface.init(writer)
+
+    logger.addHandler(LoggingHandler())
+    return reader, writer

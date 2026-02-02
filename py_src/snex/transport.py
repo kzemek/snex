@@ -8,7 +8,13 @@ from snex import models
 from . import etf
 
 if TYPE_CHECKING:
+    from typing import Protocol
+
     from .models import OutRequest, OutResponse
+
+    class FileLike(Protocol):
+        def fileno(self) -> int: ...
+        def close(self) -> None: ...
 
 
 def write_data(
@@ -32,11 +38,10 @@ def write_data(
 
 
 async def setup_io(
-    loop: asyncio.AbstractEventLoop,
+    erl_in: FileLike,
+    erl_out: FileLike,
 ) -> tuple[asyncio.StreamReader, asyncio.WriteTransport]:
-    erl_in = open(3, "rb", 0)  # noqa: ASYNC230, SIM115
-    erl_out = open(4, "wb", 0)  # noqa: ASYNC230, SIM115
-
+    loop = asyncio.get_running_loop()
     writer, _ = await loop.connect_write_pipe(asyncio.Protocol, erl_out)
 
     reader = asyncio.StreamReader()
