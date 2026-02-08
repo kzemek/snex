@@ -20,10 +20,8 @@ if TYPE_CHECKING:
     Ts = ParamSpec("Ts")
     Ks = TypeVarTuple("Ks")
 
-_main_loop: AbstractEventLoop | None = None
-_writer: asyncio.StreamWriter | None = None
-_main_thread_id: int | None = None
 
+_writer: transport.StreamWriter | None = None
 _call_futures: dict[bytes, tuple[asyncio.Future[object], AbstractEventLoop, int]] = {}
 
 
@@ -33,26 +31,9 @@ class ElixirError(Exception):
         super().__init__(msg)
 
 
-def init(writer: asyncio.StreamWriter) -> None:
-    global _main_loop, _writer, _main_thread_id  # noqa: PLW0603
-    _main_loop = asyncio.get_running_loop()
+def init(writer: transport.StreamWriter) -> None:
+    global _writer  # noqa: PLW0603
     _writer = writer
-    _main_thread_id = threading.get_ident()
-
-
-async def _write_request(req_id: bytes, command: models.OutRequest) -> None:
-    if not _main_loop or not _writer or _main_thread_id is None:
-        msg = "Snex is not running!"
-        raise RuntimeError(msg)
-
-    await _run_on_loop(
-        _main_loop,
-        _main_thread_id,
-        transport.write_data,
-        _writer,
-        req_id,
-        command,
-    )
 
 
 async def send(to: object, data: object) -> None:
@@ -103,6 +84,10 @@ async def cast(
         node: The node to call the function on; defaults to the current node
 
     """
+    if not _writer:
+        msg = "Snex is not running!"
+        raise RuntimeError(msg)
+
     req_id = models.generate_id()
     command = models.CastCommand(
         type="cast",
@@ -114,7 +99,7 @@ async def cast(
     if node is not None:
         command["node"] = node
 
-    await _write_request(req_id, command)
+    await _writer.write_serialized_threadsafe(req_id, command)
 
 
 async def call(
@@ -143,6 +128,10 @@ async def call(
             They will override the interpreter's `:encoding_opts`.
 
     """
+    if not _writer:
+        msg = "Snex is not running!"
+        raise RuntimeError(msg)
+
     loop = asyncio.get_running_loop()
 
     req_id = models.generate_id()
@@ -160,7 +149,7 @@ async def call(
     if result_encoding_opts is not None:
         command["result_encoding_opts"] = result_encoding_opts
 
-    await _write_request(req_id, command)
+    await _writer.write_serialized_threadsafe(req_id, command)
     _call_futures[req_id] = (future, loop, threading.get_ident())
 
     try:

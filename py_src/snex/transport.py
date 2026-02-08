@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import TYPE_CHECKING
 
 from snex import models
@@ -8,6 +9,7 @@ from snex import models
 from . import etf
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from typing import Protocol
 
     from .models import OutRequest, OutResponse
@@ -17,32 +19,78 @@ if TYPE_CHECKING:
         def close(self) -> None: ...
 
 
-async def write_data(
-    writer: asyncio.StreamWriter,
+StreamReader = asyncio.StreamReader
+
+
+def _serialize(
     req_id: bytes,
     data: OutRequest | OutResponse,
-) -> None:
+) -> list[bytes | bytearray | memoryview[int]]:
+    data_parts = etf.encode(data)
+
     message_type = models.out_message_type(data)
-    data_list = etf.encode(data)
-    data_len = sum(len(d) for d in data_list)
-    bytes_cnt = len(req_id) + 1 + data_len
+    header = req_id + int.to_bytes(message_type, length=1, byteorder="big")
 
-    writer.writelines(
-        [
-            int.to_bytes(bytes_cnt, length=4, byteorder="big"),
-            req_id,
-            int.to_bytes(message_type, length=1, byteorder="big"),
-        ],
-    )
-    writer.writelines(data_list)
-    await writer.drain()
+    data_len = len(header) + sum(map(len, data_parts))
+    data_len_header = int.to_bytes(data_len, length=4, byteorder="big")
+
+    data_parts[0] = data_len_header + header + data_parts[0]
+    return data_parts
 
 
-async def setup_io(
+class StreamWriter:
+    __slots__ = ("_writer", "buffer_limit", "loop", "thread_id")
+
+    _writer: asyncio.StreamWriter
+    buffer_limit: int
+    loop: asyncio.AbstractEventLoop
+    thread_id: int
+
+    def __init__(
+        self,
+        writer: asyncio.StreamWriter,
+        *,
+        buffer_limit: int,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        self._writer = writer
+        self.buffer_limit = buffer_limit
+        self.loop = loop
+        self.thread_id = threading.get_ident()
+
+    async def write_serialized(
+        self,
+        req_id: bytes,
+        data: OutRequest | OutResponse,
+    ) -> None:
+        await self.write_all(_serialize(req_id, data))
+
+    async def write_serialized_threadsafe(
+        self,
+        req_id: bytes,
+        data: OutRequest | OutResponse,
+    ) -> None:
+        coro = self.write_all(_serialize(req_id, data))
+        if threading.get_ident() == self.thread_id:
+            await coro
+        else:
+            future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+            await asyncio.wrap_future(future)
+
+    async def write_all(
+        self,
+        data: Iterable[bytes | bytearray | memoryview[int]],
+    ) -> None:
+        self._writer.writelines(data)
+        await self._writer.drain()
+
+
+async def connect_pipes(
     pipe_in: FileLike,
     pipe_out: FileLike,
+    *,
     buffer_limit: int,
-) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+) -> tuple[StreamReader, StreamWriter]:
     loop = asyncio.get_running_loop()
 
     reader = asyncio.StreamReader(limit=buffer_limit, loop=loop)
@@ -52,4 +100,4 @@ async def setup_io(
     transport, _ = await loop.connect_write_pipe(asyncio.Protocol, pipe_out)
     writer = asyncio.StreamWriter(transport, protocol, reader, loop=loop)
 
-    return reader, writer
+    return reader, StreamWriter(writer, buffer_limit=buffer_limit, loop=loop)

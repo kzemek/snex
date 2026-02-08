@@ -111,7 +111,7 @@ def run_gc(cmd: GCCommand, envs: Envs) -> None:
 
 
 async def run(
-    writer: asyncio.StreamWriter,
+    writer: transport.StreamWriter,
     req_id: bytes,
     command: InRequest,
     envs: Envs,
@@ -135,7 +135,7 @@ async def run(
                 reason=f"Unknown command: {command}",
             )
 
-        await transport.write_data(writer, req_id, result)
+        await writer.write_serialized(req_id, result)
     except Exception as e:  # noqa: BLE001
         error_result = ErrorResponse(
             type="error",
@@ -145,7 +145,7 @@ async def run(
         )
 
         try:
-            await transport.write_data(writer, req_id, error_result)
+            await writer.write_serialized(req_id, error_result)
         except Exception:
             logger.exception("Snex: Error sending error response")
 
@@ -168,8 +168,8 @@ async def run_noreply(command: InNoReply, req_id: bytes, envs: Envs) -> None:
 
 
 async def run_loop(
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
+    reader: transport.StreamReader,
+    writer: transport.StreamWriter,
 ) -> None:
     loop = asyncio.get_running_loop()
     running_tasks: set[asyncio.Task[OutResponse | None]] = set()
@@ -211,7 +211,7 @@ async def run_loop(
                     reason=str(e),
                     traceback=traceback.format_exception(e),
                 )
-                await transport.write_data(writer, req_id, result)
+                await writer.write_serialized(req_id, result)
             else:
                 logger.exception("Snex: Error in main loop")
 
@@ -220,8 +220,12 @@ async def init(
     pipe_in: FileLike,
     pipe_out: FileLike,
     buffer_limit: int,
-) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    reader, writer = await transport.setup_io(pipe_in, pipe_out, buffer_limit)
+) -> tuple[asyncio.StreamReader, transport.StreamWriter]:
+    reader, writer = await transport.connect_pipes(
+        pipe_in,
+        pipe_out,
+        buffer_limit=buffer_limit,
+    )
     interface.init(writer)
 
     logger.addHandler(LoggingHandler())

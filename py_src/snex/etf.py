@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any
 
-    Parts = list[bytes | bytearray | memoryview]
+    Parts = list[bytes | bytearray | memoryview[int]]
 
 ETF_VERSION = 131
 
