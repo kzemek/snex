@@ -93,6 +93,7 @@ See [Python Interface Documentation on HexDocs](https://hexdocs.pm/Snex/Python_I
   - [Cast and call Elixir code from Python](#cast-and-call-elixir-code-from-python)
   - [Accurate code locations in Python traces](#accurate-code-locations-in-python-traces)
   - [Using Elixir `Logger` from Python](#using-elixir-logger-from-python)
+  - [Using `snex.send` & `snex.call` from external Python processes](#using-snexsend--snexcall-from-external-python-processes)
 
 ### Custom Interpreter
 
@@ -600,3 +601,7 @@ logger.info("hello from Python", extra={"foo": "bar"})
 # depending on your Elixir Logger's metadata settings, you may see a line similar to
 # [info] hello from Python application=my_app foo=bar python_module=mymodule
 ```
+
+#### Using `snex.send` & `snex.call` from external Python processes
+
+See [`snex.serve` documentation](https://hexdocs.pm/Python_Interface_Documentation.ex#snex.serve/2) for a working example.

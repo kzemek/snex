@@ -27,6 +27,12 @@
   `snex` Python module is now documented using `ExDoc`!
   Available through `mix docs`, or [on HexDocs](https://hexdocs.pm/Python_Interface_Documentation.ex) once the release is published.
 
+- **Multiprocessing support**
+
+  `snex.serve` and `snex.io_loop_for_connection` provide a clean way to connect Python subprocesses - or any external processes - to the Snex system, enabling `snex.call` & `snex.cast` from outside of the main process.
+
+  See [`snex.serve` documentation](https://hexdocs.pm/Python_Interface_Documentation.ex#snex.serve/2) for a working example.
+
 - **`snex.Elixir` proxy**
 
   Add a syntax sugar for `snex.cast`/`snex.call` for a natural Elixir-like call syntax:

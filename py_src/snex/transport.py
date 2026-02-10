@@ -39,23 +39,15 @@ def _serialize(
 
 
 class StreamWriter:
-    __slots__ = ("_writer", "buffer_limit", "loop", "thread_id")
+    __slots__ = ("_writer", "loop", "thread_id")
 
     _writer: asyncio.StreamWriter
-    buffer_limit: int
     loop: asyncio.AbstractEventLoop
     thread_id: int
 
-    def __init__(
-        self,
-        writer: asyncio.StreamWriter,
-        *,
-        buffer_limit: int,
-        loop: asyncio.AbstractEventLoop,
-    ) -> None:
+    def __init__(self, writer: asyncio.StreamWriter) -> None:
         self._writer = writer
-        self.buffer_limit = buffer_limit
-        self.loop = loop
+        self.loop = asyncio.get_running_loop()
         self.thread_id = threading.get_ident()
 
     async def write_serialized(
@@ -83,21 +75,3 @@ class StreamWriter:
     ) -> None:
         self._writer.writelines(data)
         await self._writer.drain()
-
-
-async def connect_pipes(
-    pipe_in: FileLike,
-    pipe_out: FileLike,
-    *,
-    buffer_limit: int,
-) -> tuple[StreamReader, StreamWriter]:
-    loop = asyncio.get_running_loop()
-
-    reader = asyncio.StreamReader(limit=buffer_limit, loop=loop)
-    protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
-    await loop.connect_read_pipe(lambda: protocol, pipe_in)
-
-    transport, _ = await loop.connect_write_pipe(asyncio.Protocol, pipe_out)
-    writer = asyncio.StreamWriter(transport, protocol, reader, loop=loop)
-
-    return reader, StreamWriter(writer, buffer_limit=buffer_limit, loop=loop)

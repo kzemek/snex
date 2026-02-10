@@ -4,14 +4,15 @@ import asyncio
 import threading
 from asyncio import AbstractEventLoop
 from collections.abc import Iterable
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, overload
 
-from . import models, transport
+from . import models, runner, transport
 from .models import Atom, EncodingOpts, Term
 
 if TYPE_CHECKING:
     from asyncio import AbstractEventLoop
-    from collections.abc import Callable, Coroutine, Iterable
+    from collections.abc import Callable, Coroutine, Generator, Iterable
     from typing import Any, Literal, ParamSpec, TypeVar, TypeVarTuple, Unpack
 
     from .models import Term
@@ -31,9 +32,18 @@ class ElixirError(Exception):
         super().__init__(msg)
 
 
-def init(writer: transport.StreamWriter) -> None:
+@contextmanager
+def initialized(writer: transport.StreamWriter) -> Generator[None]:
     global _writer  # noqa: PLW0603
+    if _writer is not None:
+        msg = "Snex is already running!"
+        raise RuntimeError(msg)
+
     _writer = writer
+    try:
+        yield
+    finally:
+        _writer = None
 
 
 async def send(to: object, data: object) -> None:
@@ -177,6 +187,38 @@ def on_call_response(
         _call_soon(loop, thread_id, future.set_exception, exc)
 
 
+async def io_loop_for_connection(
+    sub_reader: asyncio.StreamReader,
+    sub_writer: asyncio.StreamWriter,
+) -> None:
+    """
+    Run an IO loop for a reader/writer pair of asyncio streams. Thread-safe.
+
+    Can be used to connect a subprocess to the main Snex loop.
+    See `snex.serve` for an example.
+
+    Closes the writer on the return path.
+
+    Examples::
+
+        await asyncio.start_unix_server(snex.io_loop_for_connection, socket_path)
+
+    """
+    if _writer is None:
+        msg = "Snex is not running!"
+        raise RuntimeError(msg)
+
+    await _run_on_loop(
+        _writer.loop,
+        _writer.thread_id,
+        runner.io_loop_for_connection(
+            sub_reader,
+            sub_writer,
+            main_loop_writer=_writer,
+        ),
+    )
+
+
 def _call_soon(
     loop: AbstractEventLoop,
     loop_thread_id: int,
@@ -192,12 +234,8 @@ def _call_soon(
 async def _run_on_loop(
     loop: AbstractEventLoop,
     loop_thread_id: int,
-    func: Callable[Ts, Coroutine[Any, Any, T]],
-    *args: Ts.args,
-    **kwargs: Ts.kwargs,
+    coro: Coroutine[Any, Any, T],
 ) -> T:
-    coro = func(*args, **kwargs)
-
     if threading.get_ident() == loop_thread_id:
         return await coro
 

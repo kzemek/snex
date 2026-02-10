@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import logging
 import pickle
+import threading
 import traceback
+from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING
 
 import snex
@@ -27,9 +30,8 @@ from .models import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable, Generator
     from typing import Final
-
-    from .transport import FileLike
 
     Envs = dict[EnvID, dict[str, object]]
 
@@ -37,6 +39,8 @@ ID_LEN_BYTES: Final[int] = 16
 ROOT_ENV_ID: Final[EnvID] = EnvID(b"root")
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+subprocess_requests: dict[bytes, transport.StreamWriter] = {}
 
 
 def env_id_to_str(env_id: EnvID) -> str:
@@ -167,7 +171,7 @@ async def run_noreply(command: InNoReply, req_id: bytes, envs: Envs) -> None:
         logger.exception("Snex: Error processing a no-reply request")
 
 
-async def run_loop(
+async def _run_loop(
     reader: transport.StreamReader,
     writer: transport.StreamWriter,
 ) -> None:
@@ -196,6 +200,14 @@ async def run_loop(
         req_id = bytes(all_data[:ID_LEN_BYTES])
         message_type = all_data[ID_LEN_BYTES]
 
+        if subprocess_writer := subprocess_requests.pop(req_id, None):
+            try:
+                await subprocess_writer.write_all((byte_cnt_bytes, all_data))
+            except Exception:
+                logger.exception("Snex: Error writing to subprocess")
+
+            continue
+
         try:
             # Validate message type
             message_type = MessageType(message_type)
@@ -222,17 +234,122 @@ async def run_loop(
                 logger.exception("Snex: Error in main loop")
 
 
-async def init(
-    pipe_in: FileLike,
-    pipe_out: FileLike,
-    buffer_limit: int,
-) -> tuple[asyncio.StreamReader, transport.StreamWriter]:
-    reader, writer = await transport.connect_pipes(
-        pipe_in,
-        pipe_out,
-        buffer_limit=buffer_limit,
-    )
-    interface.init(writer)
+@contextmanager
+def initialized(writer: transport.StreamWriter) -> Generator[None]:
+    with interface.initialized(writer):
+        logging_handler = LoggingHandler()
+        logger.addHandler(logging_handler)
+        try:
+            yield
+        finally:
+            logger.removeHandler(logging_handler)
 
-    logger.addHandler(LoggingHandler())
-    return reader, writer
+
+async def serve_forever(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    *,
+    on_ready: Callable[[], None] | None = None,
+) -> None:
+    """
+    Run Snex server loop until canceled.
+
+    Similar to `async with snex.serve(reader, writer)`.
+    """
+    twriter = transport.StreamWriter(writer)
+    with initialized(twriter):
+        if on_ready:
+            on_ready()
+
+        await _run_loop(reader, twriter)
+
+
+@asynccontextmanager
+async def serve(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+) -> AsyncGenerator[None, None]:
+    """
+    Run Snex server loop as a context manager.
+
+    The server loop is necessary to use `snex.call`/`snex.cast` from external Python
+    processes. Usually, you'll want to run it in a subprocess, and connect the other
+    end of the reader/writer pair to the main Snex process.
+
+    Examples::
+
+        import asyncio
+        from asyncio import start_unix_server
+        from concurrent.futures import ProcessPoolExecutor
+
+        import snex
+
+
+        async def in_subprocess_loop(sock_path: str) -> int:
+            reader, writer = await asyncio.open_unix_connection(sock_path)
+            async with snex.serve(reader, writer):
+                return await snex.call("Elixir.System", "pid", [])
+
+
+        def in_subprocess(sock_path: str) -> int:
+            return asyncio.run(in_subprocess_loop(sock_path))
+
+
+        async def main():
+            sock_path = "/tmp/snex.sock"
+            loop = asyncio.get_running_loop()
+            async with await start_unix_server(snex.io_loop_for_connection, sock_path):
+                with ProcessPoolExecutor() as pool:
+                    return await loop.run_in_executor(pool, in_subprocess, sock_path)
+
+    """
+    twriter = transport.StreamWriter(writer)
+    with initialized(twriter):
+        task = asyncio.create_task(_run_loop(reader, twriter))
+        try:
+            yield
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+async def _io_loop_for_connection(
+    reader: transport.StreamReader,
+    writer: transport.StreamWriter,
+    main_loop_writer: transport.StreamWriter,
+) -> None:
+    while True:
+        try:
+            header_bytes = await reader.readexactly(4)
+            byte_cnt = int.from_bytes(header_bytes, "big")
+            all_data = memoryview(await reader.readexactly(byte_cnt))
+        except asyncio.IncompleteReadError:
+            break
+
+        await main_loop_writer.write_all((header_bytes, all_data))
+
+        message_type = MessageType(all_data[ID_LEN_BYTES])
+        if message_type != MessageType.REQUEST:
+            continue
+
+        req_id = bytes(all_data[:ID_LEN_BYTES])
+        subprocess_requests[req_id] = writer
+
+
+async def io_loop_for_connection(
+    sub_reader: asyncio.StreamReader,
+    sub_writer: asyncio.StreamWriter,
+    *,
+    main_loop_writer: transport.StreamWriter,
+) -> None:
+    if threading.get_ident() != main_loop_writer.thread_id:
+        msg = "Subprocess IO loop can only be run in the Snex thread"
+        raise RuntimeError(msg)
+
+    reader, writer = sub_reader, transport.StreamWriter(sub_writer)
+
+    try:
+        await _io_loop_for_connection(reader, writer, main_loop_writer)
+    finally:
+        sub_writer.close()
