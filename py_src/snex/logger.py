@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from . import interface
-from .compat import override
+from .compat import eager_start, override
 from .models import Atom
 
 if TYPE_CHECKING:
@@ -123,6 +123,7 @@ class LoggingHandler(logging.Handler):
                 Atom("bare_log"),
                 [level, self.format(record), metadata],
             ),
+            **eager_start,
         )
         self.write_tasks.add(task)
         task.add_done_callback(self.write_tasks.discard)

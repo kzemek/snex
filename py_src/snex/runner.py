@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import snex
 
 from . import code, interface, transport
+from .compat import eager_start
 from .logger import LoggingHandler
 from .models import (
     EnvID,
@@ -305,7 +306,7 @@ async def serve(
     """
     twriter = transport.StreamWriter(writer)
     with initialized(twriter):
-        task = asyncio.create_task(_run_loop(reader, twriter))
+        task = asyncio.create_task(_run_loop(reader, twriter), **eager_start)
         try:
             yield
         finally:

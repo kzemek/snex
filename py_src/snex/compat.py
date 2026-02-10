@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import sys
+from typing import Any
 
 if sys.version_info >= (3, 11):
     import enum
@@ -23,3 +26,8 @@ else:
 
     def override(func: CallableT, /) -> CallableT:
         return func
+
+
+eager_start: dict[str, Any] = {}
+if sys.version_info >= (3, 14):
+    eager_start = {"eager_start": True}
