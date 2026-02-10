@@ -118,12 +118,13 @@ defmodule Snex.Internal.CustomInterpreter do
 
   defp make_venv!(uv, dirs) do
     {_, 0} = uv_cmd(uv, ~w[--managed-python venv --relocatable], dirs, stream?: true)
-    relativize_symlinks!(dirs)
+    relativize_symlinks!(dirs.venv_dir)
+    relativize_symlinks!(dirs.python_install_dir)
     relativize_pyvenv_home!(dirs)
   end
 
-  defp relativize_symlinks!(dirs) do
-    for link_path <- Path.join(dirs.venv_dir, "**") |> Path.wildcard(match_dot: true),
+  defp relativize_symlinks!(dir) do
+    for link_path <- Path.join(dir, "**") |> Path.wildcard(match_dot: true),
         File.lstat!(link_path).type == :symlink,
         link_target = File.read_link!(link_path),
         Path.type(link_target) == :absolute do
@@ -141,7 +142,7 @@ defmodule Snex.Internal.CustomInterpreter do
         ~r/^\s*home\s*=\s*(.*\S)\s*$/m,
         File.read!(pyvenv_cfg_path),
         fn _, home ->
-          relative_home = String.trim(home) |> Path.relative_to(dirs.project_dir, force: true)
+          relative_home = resolve_home(home) |> Path.relative_to(dirs.project_dir, force: true)
           "home = #{relative_home}"
         end,
         global: false
@@ -150,6 +151,19 @@ defmodule Snex.Internal.CustomInterpreter do
     File.write!(pyvenv_cfg_path, updated_pyvenv_cfg)
 
     :ok
+  end
+
+  defp resolve_home(home) do
+    home = String.trim(home)
+    python_dir = Path.dirname(home)
+
+    if File.lstat!(python_dir).type == :symlink do
+      link_target = File.read_link!(python_dir)
+      abs_link_target = Path.absname(link_target, Path.dirname(python_dir))
+      Path.join(abs_link_target, "bin")
+    else
+      home
+    end
   end
 
   defp uv_sync!(uv, dirs) do

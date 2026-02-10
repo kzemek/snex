@@ -1,3 +1,15 @@
+## 0.3.1 (Unreleased)
+
+### Fixes
+
+- **Resolve concrete Python directory when preparing release**
+
+  `uv 0.10.0` has changed how Python interpreters are installed - they now create and point venvs at a minor release directory, and the minor release directory is symlinked to a patch release directory.
+
+  `Snex.Release.after_assemble` only copies Python interpreters that are actually used (pointed at) by the project, so it after upgrading `uv` it only copied the symlink.
+
+  This fix resolves the concrete Python directory used while preparing venvs.
+
 ## 0.3.0
 
 ### Breaking
@@ -11,7 +23,6 @@
   Writing only encoders in both languages allows the implementation to be small and portable between versions, and reusing native decoding routines makes it highly performant - especially in Python.
 
   Consequently:
-
   - `Snex.Serde.Encoder` now requires an `encode/1` implementation, instead of `encode/2`
   - tuples are now encoded as tuples instead of lists
   - all Elixir terms can be encoded and round-tripped (fallback to `:erlang.term_to_binary/1`)
@@ -52,7 +63,6 @@
   ```
 
 - **New `Snex.Interpreter` (and custom interpreters) options**
-
   - `:label` - labels the interpreter process through `:proc_lib.set_label/1`.
     Most usefully, the label is automatically set to `__MODULE__` when calling `use Snex.Interpreter`.
     This way, `Snex.Interpreter` processes become easily traceable to the custom interpreter that spawned them.
@@ -66,7 +76,6 @@
     This can be used e.g. to run Python inside a Docker container, see `docker_example_test.exs`.
 
 - **New functions**
-
   - `Snex.destroy_env/1` - explicitly cleans up the referenced Python environment.
 
   - `Snex.Env.disable_gc/1` - opts out of automatic lifetime management for a `%Snex.Env{}`.
@@ -85,7 +94,7 @@
 
   We can now call `Snex.make_env(from: env)` without explicitly passing in an interpreter, roughly equivalent to `Snex.make_env(Snex.Env.interpreter(env), from: env)`.
 
-## Fixes
+### Fixes
 
 - **Fix `Snex.Env` usage in multi-node scenario**
 
@@ -127,7 +136,6 @@
 ### Features
 
 - **`Snex.Serde`: Rework serialization between Elixir and Python**
-
   - iodata can be wrapped with `Snex.Serde.binary(b)` to efficiently pass it to Python out-of-band, without further encoding.
     On the Python side, it's received as `bytes`.
   - Python `bytes` are passed to Elixir through the same mechanism.
@@ -167,7 +175,6 @@
 - **Fix `returning: [val]` not returning a list**
 
 - **Make sure Snex artifacts are relocatable**
-
   - Modify created venvs to be path-agnostic.
   - Provide a `&Snex.Release.after_assemble/1` step for Mix release configuration.
   - Drop the `:otp_app` configuration option with `use Snex.Interpreter`.

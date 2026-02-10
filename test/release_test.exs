@@ -42,11 +42,17 @@ defmodule SnexTest.ReleaseTest do
     assert output =~ "error: :relocatable_test_done"
   end
 
-  test "release only includes used python installations", %{release_dir: release_dir} do
+  test "release only includes used, non-symlinked python installations",
+       %{release_dir: release_dir} do
     copied_pythons = File.ls!(Path.join(["_build", "test", "snex", "python"]))
     rel_pythons = File.ls!(Path.join([release_dir, "snex", "python"]))
     assert length(copied_pythons) != length(rel_pythons)
     assert length(rel_pythons) == 1
+
+    Enum.each(rel_pythons, fn rel_python ->
+      rel_python_path = Path.join([release_dir, "snex", "python", rel_python])
+      assert File.lstat!(rel_python_path).type != :symlink
+    end)
   end
 
   test "release doesn't include python projects that are not used", %{release_dir: release_dir} do
