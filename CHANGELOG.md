@@ -15,12 +15,18 @@
 
   The Flow Control busy mark / buffer limit on Python side is set to the high watermark of `Snex.Interpreter`'s `:busy_limits_port` setting (8MB by default).
 
+### Deprecations
+
+- **`Snex.pyeval/4` with `:returning` option is deprecated**
+
+  Deprecated by the **`Snex.pyeval/4` can execute code with Python `return` statements** feature.
+  Will emit warnings on first use per code location.
+
 ### Features
 
 - **`Snex.pyeval/4` can execute code with Python `return` statements**
 
   `Snex.pyeval/4` is now able to parse and execute `return` statements in Python code.
-  This obsoletes the `:returning` option, which now emits a deprecation warning.
 
 - **`snex` Python module documentation**
 

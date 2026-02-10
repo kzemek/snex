@@ -10,12 +10,14 @@ Easy and efficient Python interop for Elixir.
 ## Highlights
 
 - **Robust & Isolated:**
-  Run multiple Python interpreters in separate OS processes, preventing GIL issues from affecting your Elixir application.
+  Run multiple Python interpreters in separate OS processes, preventing GIL issues or blocking computations from affecting your Elixir application.
+  Inter-process communication is optimized for performance to keep the overhead low.
 - **Declarative Environments:**
   Leverages [`uv`][uv] to manage Python versions and dependencies, embedding them into your application's release for consistent deployments.
+- **"Organic", high quality code:**
+  Every line of Snex is thought out and serves a purpose.
 - **Ergonomic Interface:**
-  A powerful and efficient interface with explicit control over data passing between Elixir and Python processes.
-- **Flexible:**
+  Powerful and efficient interface with explicit control over data passing between Elixir and Python processes.
   Supports custom Python environments, `asyncio` code, and integration with external Python projects.
 - **Bidirectional communication**
   Python code running under Snex can send, cast, and call Elixir code.
@@ -53,10 +55,10 @@ end
 
 - Elixir `>= 1.18`
 - [uv](https://github.com/astral-sh/uv) `>= 0.6.8` -
-  a fast Python package & project manager, used by Snex to create and manage Python environments.
+  A fast Python package & project manager, used by Snex to create and manage Python environments.
   It has to be available at compilation time but isn't needed at runtime.
 - Python `>= 3.10` -
-  this is the minimum supported version you can run your scripts with.
+  This is the minimum supported version you can run your scripts with.
   You don't need to have it installed - Snex will fetch it with `uv`.
 
 ```elixir
@@ -67,7 +69,7 @@ def deps do
   ]
 end
 
-# See Releases section in the README on how to configure mix release
+# See the Releases section in the README on how to configure mix release
 ```
 
 ## Python interface documentation
@@ -99,7 +101,7 @@ See [Python Interface Documentation on HexDocs](https://hexdocs.pm/Snex/Python_I
 
 You can define your Python project settings using `use Snex.Interpreter` in your module.
 
-Set a required Python version and any dependencies - both the Python binary and the dependencies will be fetched & synced at compile time with [uv][uv], and put into `_build/$MIX_ENV/snex` directory.
+Set a required Python version and any dependencies - both the Python binary and the dependencies will be fetched & synced at compile time with [uv][uv], and put into the `_build/$MIX_ENV/snex` directory.
 
 ```elixir
 defmodule SnexTest.NumpyInterpreter do
@@ -114,7 +116,7 @@ defmodule SnexTest.NumpyInterpreter do
 end
 ```
 
-The modules using `Snex.Interpreter` have to be `start_link`ed to use.
+Modules using `Snex.Interpreter` have to be `start_link`ed to be used.
 Each `Snex.Interpreter` (BEAM) process manages a separate Python (OS) process.
 
 ```elixir
@@ -140,11 +142,11 @@ This is the function that runs Python code, returns data from the interpreter, a
 
 ### Environments
 
-`Snex.Env` struct, also called "environment", is an Elixir-side reference to Python-side variable context in which your Python code will run.
+The `Snex.Env` struct, also called "environment", is an Elixir-side reference to a Python-side variable context in which your Python code will run.
 New environments can be allocated with `Snex.make_env/3` (and other arities).
 
 Environments are mutable, and will be modified by your Python code.
-In Python parlance, they are **global & local symbol table** your Python code is executed with.
+In Python parlance, they are the **global & local symbol table** your Python code is executed with.
 
 > [!IMPORTANT]
 >
@@ -246,8 +248,8 @@ Alternatively, you can opt into manual management of `Snex.Env` lifetime by call
 
 ### Serialization
 
-Elixir data is serialized using a limited subset of Python's Pickle format (version 5), and deserialized on Python side using `pickle.loads()`.
-Python data is serialized with a subset of Erlang's External Term Format, and deserialized on Elixir side using `:erlang.binary_to_term/1`.
+Elixir data is serialized using a limited subset of Python's Pickle format (version 5), and deserialized on the Python side using `pickle.loads()`.
+Python data is serialized with a subset of Erlang's External Term Format, and deserialized on the Elixir side using `:erlang.binary_to_term/1`.
 
 #### Encoding/decoding table
 
@@ -294,10 +296,10 @@ The serialization happens as outlined in the table (`alias Snex.Serde, as: S`)
 
 #### Customizing serialization
 
-You can control struct encoding by implementing `Snex.Serde.Encoder` protocol.
+You can control struct encoding by implementing the `Snex.Serde.Encoder` protocol.
 `Snex.Serde.Encoder.encode/1` will be called for any struct not explicitly handled in the table above, iif it implements the `Snex.Serde.Encoder` protocol.
 The result of the `encode/1` function will then be encoded again according to the table, with the same `Snex.Serde.Encoder` treatment if that result contains a struct.
-If `encode/1` returns the same struct type (e.g. `Snex.Serde.Encoder.encode(%X{}) -> %X{}`), the result will be encoded like a generic struct (i.e. as a `dict` with `__struct__` key).
+If `encode/1` returns the same struct type (e.g. `Snex.Serde.Encoder.encode(%X{}) -> %X{}`), the result will be encoded like a generic struct (i.e. as a `dict` with a `__struct__` key).
 
 Additionally, encoding defaults can be set for `Snex.Interpreter` and its derivatives through the `encoding_opts` (`t:Snex.Serde.encoding_opts/0`) option to `Snex.Interpreter.start_link/1`.
 The same option can be given to `Snex.make_env/3` and `Snex.pyeval/4` to selectively influence encoding of passed `additional_vars`.
@@ -306,7 +308,7 @@ On the Python side, you can call `snex.set_custom_encoder(encoder_fun)` to add e
 `encoder_fun` will only be called for objects that `Snex` doesn't know how to serialize.
 The result will then be encoded further according to the table above.
 
-##### Example: roundtrip serialization between an Elixir struct and Python object
+##### Example: roundtrip serialization between an Elixir struct and a Python object
 
 ```elixir
 defimpl Snex.Serde.Encoder, for: Date do
@@ -369,7 +371,7 @@ end
 
 #### Run async code
 
-Code ran by Snex lives in an [`asyncio`](https://docs.python.org/3/library/asyncio.html) loop.
+Code run by Snex lives in an [`asyncio`](https://docs.python.org/3/library/asyncio.html) loop.
 You can include async functions in your snippets and await them on the top level:
 
 ```elixir
@@ -458,7 +460,7 @@ end
 
 Snex allows sending asynchronous BEAM messages from within your running Python code.
 
-Every `env` imports `snex` module that contains a `send()` method, and can be passed a BEAM pid wrapped with `Snex.Serde.term/1`.
+Every `env` imports the `snex` module, that contains a `send()` method which can be passed a BEAM pid.
 The message contents are encoded/decoded as described in [Serialization](#serialization).
 
 This works especially well with async processing, where you can send updates while the event loop processes your long-running tasks.
@@ -557,7 +559,7 @@ import Snex.Sigils
 
 {:error, %Snex.Error{} = reason} = Snex.pyeval(inp, ~p"raise RuntimeError('nolocation')")
 
-assert ~s'  File "#{__ENV__.file}", line 557, in <module>\n' == Enum.at(reason.traceback, -2)
+assert ~s'  File "#{__ENV__.file}", line 560, in <module>\n' == Enum.at(reason.traceback, -2)
 ```
 
 All functions accepting string code also accept `Snex.Code`; that includes `Snex.pyeval` and `Snex.Interpreter.start_link/1`'s `:init_script` opt.
@@ -575,10 +577,10 @@ iex> IO.puts(~PY"12\t#{34}")
 
 #### Using Elixir `Logger` from Python
 
-`snex` Python module provides a `snex.LoggingHandler` class for logging to Elixir's `Logger` from Python.
+The `snex` Python module provides a `snex.LoggingHandler` class for logging to Elixir's `Logger` from Python.
 `snex.LoggingHandler` subclasses `logging.Handler`, and can be used with traditional Python's `logging` subsystem.
 
-Among other things, `snex.LoggingHandler` ensures that Elixir-side log has proper location information and timestamp.
+Among other things, `snex.LoggingHandler` ensures that the Elixir-side log has proper location information and timestamp.
 It also adds several extra metadata parameters, all prefixed with `python_`.
 
 Besides the standard `level` argument, `snex.LoggingHandler` also accepts `default_metadata` and `extra_metadata_keys` keyword arguments.
