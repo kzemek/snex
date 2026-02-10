@@ -42,16 +42,23 @@ defmodule SnexTest.ReleaseTest do
     assert output =~ "error: :relocatable_test_done"
   end
 
-  test "release only includes used, non-symlinked python installations",
+  test "release only includes used python installations",
        %{release_dir: release_dir} do
     copied_pythons = File.ls!(Path.join(["_build", "test", "snex", "python"]))
     rel_pythons = File.ls!(Path.join([release_dir, "snex", "python"]))
     assert length(copied_pythons) != length(rel_pythons)
-    assert length(rel_pythons) == 1
+    assert length(rel_pythons) == 2
 
     Enum.each(rel_pythons, fn rel_python ->
+      assert String.contains?(rel_python, "3.14")
       rel_python_path = Path.join([release_dir, "snex", "python", rel_python])
-      assert File.lstat!(rel_python_path).type != :symlink
+
+      if File.lstat!(rel_python_path).type == :symlink do
+        target = File.read_link!(rel_python_path)
+        assert Path.type(target) == :relative
+        target_path = Path.join([release_dir, "snex", "python", target])
+        assert File.exists?(target_path)
+      end
     end)
   end
 
@@ -142,7 +149,7 @@ defmodule SnexTest.ReleaseTest do
           version = "0.1.0"
           description = "Add your description here"
           readme = "README.md"
-          requires-python = ">=3.10"
+          requires-python = "==3.14.*"
           dependencies = [
               "dill",
               "numpy",

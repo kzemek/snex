@@ -1,14 +1,14 @@
-## 0.3.1
+## 0.3.2 (Unreleased)
 
 ### Fixes
 
-- **Resolve concrete Python directory when preparing release**
+- **Copy Python linked directories over when preparing release**
 
   `uv 0.10.0` has changed how Python interpreters are installed - they now create and point venvs at a minor release directory, and the minor release directory is symlinked to a patch release directory.
 
   `Snex.Release.after_assemble` only copies Python interpreters that are actually used (pointed at) by the project, so it after upgrading `uv` it only copied the symlink.
 
-  This fix resolves the concrete Python directory used while preparing venvs.
+  This fix recursively resolves and copies over symlinks while copying the Python directories.
 
 ## 0.3.0
 

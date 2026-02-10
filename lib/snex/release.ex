@@ -47,11 +47,13 @@ defmodule Snex.Release do
       for src_project_path <- Path.join(src_projects_dir, "*") |> Path.wildcard(),
           project_name = Path.basename(src_project_path),
           snex_custom_interpreter?(project_name),
-          into: MapSet.new() do
-        target_project_path = Path.join(target_projects_path, project_name)
-        File.cp_r!(src_project_path, target_project_path)
+          reduce: MapSet.new() do
+        used_pythons ->
+          target_project_path = Path.join(target_projects_path, project_name)
+          File.cp_r!(src_project_path, target_project_path)
 
-        python_name(src_project_path)
+          python_name = python_name(src_project_path)
+          with_symlinks(used_pythons, python_name, src_python_install_dir)
       end
 
     for python_name <- used_pythons do
@@ -61,6 +63,21 @@ defmodule Snex.Release do
     end
 
     rel
+  end
+
+  defp with_symlinks(%MapSet{} = acc, python_name, src_python_install_dir) do
+    python_path = Path.join(src_python_install_dir, python_name)
+
+    with false <- MapSet.member?(acc, python_name),
+         %{type: :symlink} <- File.lstat!(python_path) do
+      link_target = File.read_link!(python_path)
+      linked_python_name = Path.basename(link_target)
+
+      MapSet.put(acc, python_name)
+      |> with_symlinks(linked_python_name, src_python_install_dir)
+    else
+      _ -> MapSet.put(acc, python_name)
+    end
   end
 
   defp snex_custom_interpreter?(project_name) do
