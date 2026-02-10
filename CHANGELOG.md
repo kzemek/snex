@@ -1,4 +1,4 @@
-## 0.4.0 (Unreleased)
+## 0.4.0 (Release Candidate)
 
 ### Breaking
 

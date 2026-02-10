@@ -65,7 +65,7 @@ end
 # mix.exs
 def deps do
   [
-    {:snex, "~> 0.3.2"}
+    {:snex, "~> 0.4.0-rc0"}
   ]
 end
 
