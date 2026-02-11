@@ -29,7 +29,6 @@ Code is optimized to keep the performance overhead low.
 **Forward Compatibility** -
 Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
 
-
 ## Quick example
 
 ```elixir
@@ -80,7 +79,7 @@ end
 
 ## Python interface documentation
 
-See [Python Interface Documentation on HexDocs](https://hexdocs.pm/Snex/Python_Interface_Documentation.html)
+See [Python Interface Documentation on HexDocs](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html)
 
 ## Core Concepts & Usage
 
@@ -510,7 +509,7 @@ Both functions will run `apply(m, f, a)` in a new process (`m` and `f` will be c
 They also accept an optional `node` argument to apply the function on a remote node.
 
 Additionally, `snex.call` accepts `result_encoding_opts` to control how the result is encoded to Python.
-See [Python Interface Documentation / snex.EncodingOpts](https://hexdocs.pm/snex/Python_Interface_Documentation.html#t:snex.EncodingOpts/0) for more details.
+See [Python Interface Documentation / snex.EncodingOpts](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html#t:snex.EncodingOpts/0) for more details.
 
 ```elixir
 {:ok, inp} = Snex.Interpreter.start_link()
@@ -539,7 +538,7 @@ Snex includes syntax sugar for `snex.call` and `snex.cast` in the form of the `E
   )
 ```
 
-See [Python Interface Documentation / snex.BeamModuleProxy](https://hexdocs.pm/snex/Python_Interface_Documentation.html#t:snex.BeamModuleProxy/0) for more details.
+See [Python Interface Documentation / snex.BeamModuleProxy](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html#t:snex.BeamModuleProxy/0) for more details.
 
 `snex.Elixir` is auto-imported into every Snex environment as `Elixir`
 
@@ -612,4 +611,4 @@ logger.info("hello from Python", extra={"foo": "bar"})
 
 #### Using `snex.send` & `snex.call` from external Python processes
 
-See [`snex.serve` documentation](https://hexdocs.pm/Python_Interface_Documentation.ex#snex.serve/2) for a working example.
+See [`snex.serve` documentation](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html#snex.serve/2) for a working example.
