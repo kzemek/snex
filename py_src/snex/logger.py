@@ -22,7 +22,7 @@ class LoggingHandler(logging.Handler):
 
     Log levels between `INFO` and `WARNING` are translated to `:notice`.
     Log levels higher than `CRITICAL` are translated to `:alert`.
-    Log levels 10 higher than `CRITICAL` that are translated to `:emergency`.
+    Log levels 10 higher than `CRITICAL` are translated to `:emergency`.
 
     Adds the following metadata to the log:
     - `file` - The file the log was emitted from (full path)

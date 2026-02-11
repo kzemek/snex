@@ -6,7 +6,7 @@ defmodule Snex.Application do
   Instead, you would start the application with `Application.start(:snex)`.
 
   If `:snex` is in your application's dependencies, it will be started
-  automatically unless you explicitely set `runtime: false`.
+  automatically unless you explicitly set `runtime: false`.
   """
 
   use Application

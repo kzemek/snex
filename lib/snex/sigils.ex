@@ -1,5 +1,5 @@
 defmodule Snex.Sigils do
-  @moduledoc """
+  @moduledoc ~S"""
   Sigils for creating `Snex.Code` structs.
 
   `~p`, `~P` and `~PY` sigils create `Snex.Code` structs with location metadata.

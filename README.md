@@ -24,7 +24,7 @@ Python code running under Snex can send messages to BEAM processes and call Erla
 
 **High quality, _organic_ code** -
 Every line of Snex is thought out and serves a purpose.
-Code is optimized to keep the performance overhead low.
+Code is optimized to keep performance overhead low.
 
 **Forward Compatibility** -
 Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
@@ -302,7 +302,7 @@ The serialization happens as outlined in the table (`alias Snex.Serde, as: S`)
 #### Customizing serialization
 
 You can control struct encoding by implementing the `Snex.Serde.Encoder` protocol.
-`Snex.Serde.Encoder.encode/1` will be called for any struct not explicitly handled in the table above, iif it implements the `Snex.Serde.Encoder` protocol.
+`Snex.Serde.Encoder.encode/1` will be called for any struct not explicitly handled in the table above, iff it implements the `Snex.Serde.Encoder` protocol.
 The result of the `encode/1` function will then be encoded again according to the table, with the same `Snex.Serde.Encoder` treatment if that result contains a struct.
 If `encode/1` returns the same struct type (e.g. `Snex.Serde.Encoder.encode(%X{}) -> %X{}`), the result will be encoded like a generic struct (i.e. as a `dict` with a `__struct__` key).
 

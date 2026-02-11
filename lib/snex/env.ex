@@ -1,7 +1,7 @@
 defmodule Snex.Env do
   @moduledoc """
-  An environment (`%Snex.Env{}`) is a Elixir-side reference to Python-side variable context in which
-  the Python code is executed.
+  An environment (`%Snex.Env{}`) is an Elixir-side reference to a Python-side variable context
+  in which the Python code is executed.
 
   This module is not intended to be used directly.
   Instead, you would use the `Snex.make_env/3` to create environments, `Snex.pyeval/4`
