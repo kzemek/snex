@@ -90,7 +90,10 @@ class ModuleDocs:
         last_idx = len(lines) - 1
         indent = None
         for idx in range(examples_idx + 1, len(lines)):
-            if lines[idx] and lines[idx][0] != " ":
+            if not lines[idx]:
+                continue
+
+            if lines[idx][0] != " ":
                 last_idx = idx - 1
                 break
 
@@ -101,7 +104,7 @@ class ModuleDocs:
         lines[examples_idx + 1] = "```python"  # this starts as an empty line
         lines[last_idx] = lines[last_idx] + "\n```"
 
-        for idx in range(examples_idx + 2, last_idx):
+        for idx in range(examples_idx + 2, last_idx + 1):
             lines[idx] = lines[idx][indent:].rstrip()
 
     def _collect_function(self, obj: FunctionType, group: str, name: str) -> None:
