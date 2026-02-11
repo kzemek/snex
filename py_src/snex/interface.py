@@ -197,7 +197,7 @@ async def io_loop_for_connection(
     Can be used to connect a subprocess to the main Snex loop.
     See `snex.serve` for an example.
 
-    Closes the writer on the return path.
+    Closes the writer on the return path and waits until it's closed.
 
     Examples::
 

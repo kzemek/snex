@@ -354,3 +354,4 @@ async def io_loop_for_connection(
         await _io_loop_for_connection(reader, writer, main_loop_writer)
     finally:
         sub_writer.close()
+        await sub_writer.wait_closed()
