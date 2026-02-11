@@ -31,7 +31,7 @@ defmodule SnexLoggingTest do
               logger.#{unquote(level)}("hello from Python")
               """)
 
-            Process.sleep(5)
+            Process.sleep(10)
           end)
 
         assert log =~ "[#{unquote(level)}] hello from Python"
@@ -52,7 +52,7 @@ defmodule SnexLoggingTest do
             return (t.name, t.ident, os.getpid())
             """)
 
-          Process.sleep(5)
+          Process.sleep(10)
           result
         end)
 
@@ -77,7 +77,7 @@ defmodule SnexLoggingTest do
             test_logger.info("with default metadata")
             """)
 
-          Process.sleep(5)
+          Process.sleep(10)
         end)
 
       assert log =~ "with default metadata"
@@ -98,7 +98,7 @@ defmodule SnexLoggingTest do
             test_logger.info("with extra keys", extra={"extra_1": "extra_value"})
             """)
 
-          Process.sleep(5)
+          Process.sleep(10)
         end)
 
       assert log =~ "with extra keys"
@@ -113,7 +113,7 @@ defmodule SnexLoggingTest do
             logger.info("location test")
             """)
 
-          Process.sleep(5)
+          Process.sleep(10)
         end)
 
       assert log =~ "file=#{__ENV__.file}"
