@@ -124,7 +124,7 @@ defmodule Snex.Internal.CustomInterpreter do
   end
 
   defp relativize_symlinks!(dir) do
-    for link_path <- Path.join(dir, "**") |> Path.wildcard(match_dot: true),
+    for link_path <- dir |> Path.join("**") |> Path.wildcard(),
         File.lstat!(link_path).type == :symlink,
         link_target = File.read_link!(link_path),
         Path.type(link_target) == :absolute do

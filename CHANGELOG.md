@@ -31,13 +31,13 @@
 - **`snex` Python module documentation**
 
   `snex` Python module is now documented using `ExDoc`!
-  Available through `mix docs`, or [on HexDocs](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html) once the release is published.
+  Available through `mix docs`, or [on HexDocs](https://hexdocs.pm/snex/0.4.0-rc1/Python_Interface_Documentation.html) once the release is published.
 
 - **Multiprocessing support**
 
   `snex.serve` and `snex.io_loop_for_connection` provide a clean way to connect Python subprocesses - or any external processes - to the Snex system, enabling `snex.call` & `snex.cast` from outside of the main process.
 
-  See [`snex.serve` documentation](https://hexdocs.pm/snex/0.4.0-rc0/Python_Interface_Documentation.html#snex.serve/2) for a working example.
+  See [`snex.serve` documentation](https://hexdocs.pm/snex/0.4.0-rc1/Python_Interface_Documentation.html#snex.serve/2) for a working example.
 
 - **`snex.Elixir` proxy**
 
@@ -81,6 +81,12 @@
 
   `~PY"return 1"` is exactly the same as `~P"return 1"`, but slightly more obvious in its purpose and less likely to clash with other custom sigils.
   It's also unfortunately assymetric, as Elixir doesn't allow a lowercase `sigil_py`.
+
+### Fixes
+
+- **Do not relativize dot directories when setting up venvs**
+
+  `uv` uses temporary `.temp` directories for its work, and their cleanup can race with the relativization logic, causing errors on `File.lstat!` and the like.
 
 ### Changes
 
