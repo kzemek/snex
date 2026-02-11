@@ -9,20 +9,26 @@ Easy and efficient Python interop for Elixir.
 
 ## Highlights
 
-- **Robust & Isolated:**
-  Run multiple Python interpreters in separate OS processes, preventing GIL issues or blocking computations from affecting your Elixir application.
-  Inter-process communication is optimized for performance to keep the overhead low.
-- **Declarative Environments:**
-  Leverages [`uv`][uv] to manage Python versions and dependencies, embedding them into your application's release for consistent deployments.
-- **"Organic", high quality code:**
-  Every line of Snex is thought out and serves a purpose.
-- **Ergonomic Interface:**
-  Powerful and efficient interface with explicit control over data passing between Elixir and Python processes.
-  Supports custom Python environments, `asyncio` code, and integration with external Python projects.
-- **Bidirectional communication**
-  Python code running under Snex can send, cast, and call Elixir code.
-- **Forward Compatibility:**
-  Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
+**Robust & Isolated** -
+Run multiple Python interpreters in separate OS processes, preventing GIL issues or blocking computations from affecting your Elixir application.
+
+**Declarative Environments** -
+Leverages [`uv`][uv] to manage Python versions and dependencies, embedding them into your application's release for consistent deployments.
+
+**Ergonomic Interface** -
+Powerful and efficient interface with explicit control over data.
+Supports custom Python environments, `asyncio`, and integration with external Python projects.
+
+**Bidirectional communication** -
+Python code running under Snex can send messages to BEAM processes and call Erlang/Elixir functions.
+
+**High quality, _organic_ code** -
+Every line of Snex is thought out and serves a purpose.
+Code is optimized to keep the performance overhead low.
+
+**Forward Compatibility** -
+Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
+
 
 ## Quick example
 
