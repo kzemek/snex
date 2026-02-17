@@ -219,7 +219,7 @@ async def _run_loop(
             else:
                 coro = run_noreply(command, req_id, envs)
 
-            task = loop.create_task(coro)
+            task = loop.create_task(coro, **eager_start)
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
         except Exception as e:
