@@ -1,4 +1,4 @@
-## 0.4.0 (Release Candidate)
+## 0.4.0
 
 ### Breaking
 

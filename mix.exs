@@ -9,7 +9,7 @@ defmodule Snex.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       make_targets: ["all"],
       make_clean: ["clean"],
-      version: "0.4.0-rc1",
+      version: "0.4.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
