@@ -1,3 +1,9 @@
+## 0.4.1 (Unreleased)
+
+### Fixes
+
+- **Fix `port_opts` option of `Snex.Interpreter` being silently ignored**
+
 ## 0.4.0
 
 ### Breaking

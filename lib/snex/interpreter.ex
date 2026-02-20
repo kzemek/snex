@@ -223,7 +223,8 @@ defmodule Snex.Interpreter do
         :init_script_timeout,
         :sync_start?,
         :label,
-        :encoding_opts
+        :encoding_opts,
+        :port_opts
       ])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
