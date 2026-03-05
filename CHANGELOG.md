@@ -57,7 +57,7 @@
 
 - **`snex.Elixir` proxy**
 
-  Add a syntax sugar for `snex.cast`/`snex.call` for a natural Elixir-like call syntax:
+  Added syntax sugar for `snex.cast`/`snex.call` for a natural Elixir-like call syntax:
 
   ```python
   await Elixir.Enum.frequencies(["a", "b", "a", "a", "d", "b"])
@@ -65,8 +65,8 @@
 
 - **`snex.LoggingHandler`**
 
-  Snex Python interface now a `snex.LoggingHandler` class for use with Python's `logging`.
-  The class can be used with Python's `logging` to log messages from Python with Elixir's `Logger`.
+  Snex Python interface now provides a `snex.LoggingHandler` class for use with Python's `logging`.
+  The handler outputs Python logs using Elixir's `Logger`.
 
   ```python
   import logging
