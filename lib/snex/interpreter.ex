@@ -96,6 +96,7 @@ defmodule Snex.Interpreter do
           | {:label, term()}
           | {:encoding_opts, Snex.Serde.encoding_opts()}
           | {:port_opts, port_opts()}
+          | {:eager_polyfill?, boolean()}
           | GenServer.option()
 
   @doc false
@@ -209,6 +210,12 @@ defmodule Snex.Interpreter do
     - `:port_opts` (`t:port_opts/0`) - Advanced options for the port used to communicate with
       the Python interpreter.
 
+    - `:eager_polyfill?` (`t:boolean/0`) - If `true`, Snex's `asyncio.AbstractEventLoop` will use
+      an eager polyfill for the event loop. This causes tasks scheduled with `loop.call_soon`
+      (including `asyncio.Future.set_result` and `loop.create_task`) to run immediately in the same
+      loop tick, instead of waiting for `epoll()` inbetween. Reduces latency of Snex operations, but
+      is potentially incompatible with (or obsoleted by) future Python versions. Default: `true`.
+
     - any other options will be passed to `GenServer.start_link/3`.
   """
   @spec start_link([option()]) :: GenServer.on_start()
@@ -224,7 +231,8 @@ defmodule Snex.Interpreter do
         :sync_start?,
         :label,
         :encoding_opts,
-        :port_opts
+        :port_opts,
+        :eager_polyfill?
       ])
 
     GenServer.start_link(__MODULE__, args, genserver_opts)
@@ -335,7 +343,10 @@ defmodule Snex.Interpreter do
 
     {_, high_watermark} = Keyword.fetch!(additional_port_opts, :busy_limits_port)
 
-    default_args = ["-m", "snex", "--buffer-limit", to_string(high_watermark)]
+    eager_polyfill =
+      if Keyword.get(opts, :eager_polyfill?, true), do: ["--eager-polyfill"], else: []
+
+    default_args = ["-m", "snex", "--buffer-limit", to_string(high_watermark) | eager_polyfill]
 
     {exec, args} =
       case opts[:wrap_exec] do

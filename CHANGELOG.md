@@ -1,5 +1,15 @@
 ## 0.4.1 (Unreleased)
 
+### Features
+
+- **Snex's `asyncio` loop is now _eager_**
+  This means that tasks added to the loop with `call_soon` will be ran in the same loop iteration, before suspending on internal `select`, considering timers, etc.
+  A loop will continue iterating until there are no more immediately fulfillable tasks, it has processed 100 tasks, or it has been processing tasks for over 10 microseconds, whichever comes first.
+
+  Note that this behaviour is different than `eager_task=True` setting, which causes tasks to be processed at the point of creation.
+
+  This change brings significant latency improvements to Snex, regardless of Python version. It is generally safe for well-formed `asyncio` applications, but can be disabled by passing `eager_polyfill?: false` to `Snex.Interpreter.start_link/1`.
+
 ### Fixes
 
 - **Fix `port_opts` option of `Snex.Interpreter` being silently ignored**
