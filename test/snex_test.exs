@@ -389,6 +389,13 @@ defmodule SnexTest do
     end
   end
 
+  describe "use_stdio" do
+    test "can run interpreter with use_stdio option" do
+      {:ok, inp} = Snex.Interpreter.start_link(port_opts: [:use_stdio], init_script: "import sys")
+      assert {:ok, true} = Snex.pyeval(inp, "return sys.stdin is None and sys.stdout is None")
+    end
+  end
+
   describe "early returns" do
     test "code is able to return early", %{env: env} do
       code = ~P"""

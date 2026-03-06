@@ -74,11 +74,18 @@ defmodule Snex.Interpreter do
   @typedoc """
   See `:erlang.open_port/2` options for detailed documentation.
 
+  `:use_stdio` is `false` by default, and Snex is optimized to use non-stdio pipes.
+  Setting this option is not generally recommended, but can be useful for running Python
+  interpreter in a Docker container or over SSH, where stdio is the only immediately available
+  transport.
+  Important: this option will set `sys.stdin` and `sys.stdout` to `None` in the Python process.
+
   `:busy_limits_port` is set to `#{inspect(@default_busy_limits_port)}` if not specified.
   The high watermark of this option is also used as the buffer limit on Python side.
   """
   @type port_opts ::
-          {:parallelism, boolean()}
+          :use_stdio
+          | {:parallelism, boolean()}
           | {:busy_limits_port, {non_neg_integer(), non_neg_integer()} | :disabled}
           | {:busy_limits_msgq, {non_neg_integer(), non_neg_integer()} | :disabled}
 
@@ -334,19 +341,31 @@ defmodule Snex.Interpreter do
       |> Map.put("PYTHONPATH", pythonpath)
       |> Enum.map(fn {key, value} -> {~c"#{key}", ~c"#{value}"} end)
 
+    user_port_opts = Keyword.get(opts, :port_opts, [])
+
+    {use_stdio, user_port_opts} =
+      if :use_stdio in user_port_opts,
+        do: {:use_stdio, user_port_opts -- [:use_stdio]},
+        else: {nil, user_port_opts}
+
     additional_port_opts =
-      opts
-      |> Keyword.get(:port_opts, [])
+      user_port_opts
       |> Keyword.take([:parallelism, :busy_limits_port, :busy_limits_msgq])
       |> Keyword.merge(Keyword.take(opts, [:cd]))
       |> Keyword.put_new(:busy_limits_port, @default_busy_limits_port)
+      |> Kernel.++(List.wrap(use_stdio))
 
     {_, high_watermark} = Keyword.fetch!(additional_port_opts, :busy_limits_port)
 
-    eager_polyfill =
+    eager_polyfill_opt =
       if Keyword.get(opts, :eager_polyfill?, true), do: ["--eager-polyfill"], else: []
 
-    default_args = ["-m", "snex", "--buffer-limit", to_string(high_watermark) | eager_polyfill]
+    use_stdio_opt =
+      if use_stdio, do: ["--use-stdio"], else: []
+
+    default_args =
+      ["-m", "snex", "--buffer-limit", to_string(high_watermark)] ++
+        eager_polyfill_opt ++ use_stdio_opt
 
     {exec, args} =
       case opts[:wrap_exec] do

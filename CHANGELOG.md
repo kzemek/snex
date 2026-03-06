@@ -10,6 +10,14 @@
 
   This change brings significant latency improvements to Snex, regardless of Python version. It is generally safe for well-formed `asyncio` applications, but can be disabled by passing `eager_polyfill?: false` to `Snex.Interpreter.start_link/1`.
 
+- **Support for direct use of stdio pipes**
+
+  A new advanced option `port_opts: [:use_stdio]` puts Snex in an stdio mode.
+
+  Setting this option is not generally recommended, but can be useful for running Python interpreter in a Docker container or over SSH, where stdio is the only immediately available transport.
+
+  Important: this option will set `sys.stdin` and `sys.stdout` to `None` in the Python process.
+
 ### Fixes
 
 - **Fix `port_opts` option of `Snex.Interpreter` being silently ignored**

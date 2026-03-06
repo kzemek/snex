@@ -9,19 +9,16 @@ defmodule Snex.DockerExampleTest do
     {:ok, interpreter} =
       SnexTest.MyProject.start_link(
         init_script: "import socket",
+        port_opts: [:use_stdio],
         wrap_exec: fn _python, args ->
           cwd = File.cwd!()
 
-          # Port communication uses fds 3 and 4, but we can't passthrough them to Docker.
-          # This example works around it by tunneling them through stdin/stdout.
           shell = """
           docker run \
             --rm -i --hostname=snex-test-container  \
             -v #{cwd}:/app -w /app \
             -e PYTHONPATH=$(echo $PYTHONPATH | sed 's|#{cwd}|/app|g') \
-            python:3.11 \
-            sh -c "exec 3<&0 4>&1; exec python #{Enum.join(args, " ")}" \
-            <&3 >&4\
+            python:3.11 python #{Enum.join(args, " ")}
           """
 
           {"/bin/bash", ["-c", shell]}

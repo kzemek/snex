@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import io
+import os
 import sys
 from contextlib import suppress
 
@@ -14,6 +15,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, line_buffering=True, newline="\
 parser = argparse.ArgumentParser()
 parser.add_argument("--buffer-limit", type=int, default=8 * 1024 * 1024)
 parser.add_argument("--eager-polyfill", action="store_true")
+parser.add_argument("--use-stdio", action="store_true")
 args = parser.parse_args()
 
 
@@ -38,9 +40,15 @@ async def serve_forever(
     await runner.serve_forever(reader, writer)
 
 
+if args.use_stdio:
+    sys.stdin = sys.stdout = None
+    in_fd, out_fd = 0, 1
+else:
+    in_fd, out_fd = 3, 4
+
 with (
-    open(3, "rb", 0) as erl_in,
-    open(4, "wb", 0) as erl_out,
+    os.fdopen(in_fd, "rb", 0) as erl_in,
+    os.fdopen(out_fd, "wb", 0) as erl_out,
     suppress(asyncio.CancelledError),
 ):
     asyncio.run(
