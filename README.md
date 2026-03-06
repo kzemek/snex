@@ -10,24 +10,23 @@ Easy and efficient Python interop for Elixir.
 ## Highlights
 
 **Robust & Isolated** -
-Run multiple Python interpreters in separate OS processes, preventing GIL issues or blocking computations from affecting your Elixir application.
+Run any number of Python interpreters in separate OS processes, preventing GIL issues or blocking computations from affecting your Elixir application.
+You can [call asyncio code](#run-async-code), [use PyPy instead of CPython](https://github.com/kzemek/snex/blob/main/test/pypy_example_test.exs), or even [run Python in a Docker container](https://github.com/kzemek/snex/blob/main/test/docker_example_test.exs)!
 
 **Declarative Environments** -
 Leverages [`uv`][uv] to manage Python versions and dependencies, embedding them into your application's release for consistent deployments.
-
-**Ergonomic Interface** -
-Powerful and efficient interface with explicit control over data.
-Supports custom Python environments, `asyncio`, and integration with external Python projects.
+Supports [custom Python environments](#custom-interpreter) and [easy integration with Python projects](#use-your-in-repo-project).
 
 **Bidirectional communication** -
-Python code running under Snex can send messages to BEAM processes and call Erlang/Elixir functions.
+Powerful and efficient interface with explicit control over data.
+Python code running under Snex can [send messages to BEAM processes](#send-messages-from-python-code) and [call Erlang/Elixir functions](#cast-and-call-elixir-code-from-python).
 
 **High quality, _organic_ code** -
 Every line of Snex is thought out and serves a purpose.
 Code is optimized to keep performance overhead low.
 
 **Forward Compatibility** -
-Built on stable foundations, so future versions of Python or Elixir are unlikely to require Snex updates to use - they should work day one!
+Built on stable foundations independent of C-level interfaces, so future versions of Python and Elixir will work on day one!
 
 ## Quick example
 
@@ -77,10 +76,6 @@ end
 # See the Releases section in the README on how to configure mix release
 ```
 
-## Python interface documentation
-
-See [Python Interface Documentation on HexDocs](https://hexdocs.pm/snex/Python_Interface_Documentation.html)
-
 ## Core Concepts & Usage
 
 - [Custom Interpreter](#custom-interpreter)
@@ -88,6 +83,7 @@ See [Python Interface Documentation on HexDocs](https://hexdocs.pm/snex/Python_I
 - [Environments](#environments)
   - [Initialization script](#initialization-script)
   - [Passing `Snex.Env` between Erlang nodes](#passing-snexenv-between-erlang-nodes)
+- [Python Interface Documentation](#python-interface-documentation)
 - [Serialization](#serialization)
   - [Encoding/decoding table](#encodingdecoding-table)
   - [Customizing serialization](#customizing-serialization)
@@ -250,6 +246,10 @@ end)
 ```
 
 Alternatively, you can opt into manual management of `Snex.Env` lifetime by calling `Snex.Env.disable_gc/1` on the original node, and later destroying the env by calling `Snex.destroy_env/1` on any node.
+
+### Python interface documentation
+
+See [Python Interface Documentation on HexDocs](https://hexdocs.pm/snex/Python_Interface_Documentation.html)
 
 ### Serialization
 
