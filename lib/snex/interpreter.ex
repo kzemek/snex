@@ -325,6 +325,7 @@ defmodule Snex.Interpreter do
     {:noreply, state}
   end
 
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp init_python_port(opts) do
     python = System.find_executable(opts[:python] || "python")
     snex_pythonpath = Internal.Paths.snex_pythonpath()
