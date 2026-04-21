@@ -4,9 +4,9 @@
 
 - **Disable `busy_limits_msgq` on the Python port**
 
-Under certain conditions `busy_limits_msgq` was putting the port into a `busy` state and never releasing it, even with `{:queue_size, 0}`.
-As a workaround before the bug is fixed in BEAM, remove this limit from Snex's Python ports.
-Compared to the pending-bytes `busy_limits_port`, it's not an important limit anyway.
+  Under certain conditions `busy_limits_msgq` was putting the port into a `busy` state and never releasing it, even with `{:queue_size, 0}`.
+  As a workaround before the bug is fixed in BEAM, remove this limit from Snex's Python ports.
+  Compared to the pending-bytes `busy_limits_port`, it's not an important limit anyway.
 
 ## 0.4.1
 
