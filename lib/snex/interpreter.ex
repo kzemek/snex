@@ -87,7 +87,6 @@ defmodule Snex.Interpreter do
           :use_stdio
           | {:parallelism, boolean()}
           | {:busy_limits_port, {non_neg_integer(), non_neg_integer()} | :disabled}
-          | {:busy_limits_msgq, {non_neg_integer(), non_neg_integer()} | :disabled}
 
   @typedoc """
   Options for `start_link/1`.
@@ -351,8 +350,9 @@ defmodule Snex.Interpreter do
 
     additional_port_opts =
       user_port_opts
-      |> Keyword.take([:parallelism, :busy_limits_port, :busy_limits_msgq])
+      |> Keyword.take([:parallelism, :busy_limits_port])
       |> Keyword.merge(Keyword.take(opts, [:cd]))
+      |> Keyword.put(:busy_limits_msgq, :disabled)
       |> Keyword.put_new(:busy_limits_port, @default_busy_limits_port)
       |> Kernel.++(List.wrap(use_stdio))
 
