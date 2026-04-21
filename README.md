@@ -69,7 +69,7 @@ end
 # mix.exs
 def deps do
   [
-    {:snex, "~> 0.4.1"}
+    {:snex, "~> 0.4.2"}
   ]
 end
 
