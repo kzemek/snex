@@ -48,8 +48,8 @@ defmodule Snex.MixProject do
         main: "Snex",
         extras: [
           "CHANGELOG.md": [title: "Changelog"],
-          License: [title: "License"],
-          Notice: [title: " Notice"]
+          LICENSE: [title: "License"],
+          NOTICE: [title: " Notice"]
         ],
         assets: %{"doc_helpers/script" => "script"},
         before_closing_head_tag: fn
